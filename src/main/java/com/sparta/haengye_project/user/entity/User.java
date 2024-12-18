@@ -1,5 +1,6 @@
 package com.sparta.haengye_project.user.entity;
 
+import com.sparta.haengye_project.user.security.EncryptConverter;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -18,6 +19,7 @@ public class User {
     private Long userId;
 
     @Column(unique = true, nullable = false)
+    @Convert(converter = EncryptConverter.class) // 암호화된 이메일
     private String email;
 
     private String password;
@@ -26,6 +28,7 @@ public class User {
 
     private String phoneNumber;
 
+    @Convert(converter = EncryptConverter.class) // 암호화된 주소
     private String address;
 
 }
