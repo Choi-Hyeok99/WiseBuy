@@ -3,7 +3,6 @@ package com.sparta.haengye_project.user.dto;
 import lombok.Data;
 
 @Data
-
 public class UserSignupRequestDto {
 
     private String email;       // 이메일
