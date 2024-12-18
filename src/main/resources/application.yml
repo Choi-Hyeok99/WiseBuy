@@ -1,21 +1,8 @@
 spring:
   datasource:
-    # ??? ?? DB
-    user:
-      url: jdbc:mysql://haengyeo_mysql_user:3306/user_db
-      username: ${MYSQL_USER}
-      password: ${MYSQL_PASSWORD}
-    # ?? ?? DB
-    product:
-      url: jdbc:mysql://haengyeo_mysql_product:3306/product_db
-      username: ${MYSQL_USER}
-      password: ${MYSQL_PASSWORD}
-    # ?? ?? DB
-    order:
-      url: jdbc:mysql://haengyeo_mysql_order:3306/order_db
-      username: ${MYSQL_USER}
-      password: ${MYSQL_PASSWORD}
-
+    url: jdbc:mysql://mysql_user:3306/user_db  # ????? ???? URL ??
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PASSWORD}
   jpa:
     properties:
       hibernate:
