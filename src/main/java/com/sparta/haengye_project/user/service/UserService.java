@@ -7,6 +7,7 @@ import com.sparta.haengye_project.user.entity.User;
 import com.sparta.haengye_project.user.repository.UserRepository;
 import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
@@ -17,9 +18,13 @@ import java.util.Optional;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+
 
 
     public UserSignupResponseDto signup(UserSignupRequestDto requestDto) {
+
+        String encodedPassword = passwordEncoder.encode(requestDto.getPassword());
 
         Optional<User> existEmail = userRepository.findByEmail(requestDto.getEmail());
 
@@ -29,7 +34,7 @@ public class UserService {
 
         User user = new User();
         user.setEmail(requestDto.getEmail());
-        user.setPassword(requestDto.getPassword());  // 비밀번호 암호화 없이 그대로 사용
+        user.setPassword(encodedPassword);
         user.setName(requestDto.getName());
         user.setPhoneNumber(requestDto.getPhoneNumber());
         user.setAddress(requestDto.getAddress());
