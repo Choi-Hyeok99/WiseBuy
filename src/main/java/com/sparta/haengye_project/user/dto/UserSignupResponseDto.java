@@ -1,4 +1,4 @@
-package com.sparta.haengye_project.dto;
+package com.sparta.haengye_project.user.dto;
 
 import lombok.Data;
 

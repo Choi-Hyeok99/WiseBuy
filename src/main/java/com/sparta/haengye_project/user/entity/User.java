@@ -1,22 +1,21 @@
-package com.sparta.haengye_project.entity;
+package com.sparta.haengye_project.user.entity;
 
 import jakarta.persistence.*;
-
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+
 @Entity
 @Data
+@NoArgsConstructor  // 기본 생성자 추가
 @AllArgsConstructor
-@Builder
 public class User {
 
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long user_Id;
+    private Long userId;
 
     @Column(unique = true, nullable = false)
     private String email;
@@ -29,12 +28,4 @@ public class User {
 
     private String address;
 
-    public User(Long user_Id, String email, String password, String name, String phoneNumber, String address) {
-        this.user_Id = user_Id;
-        this.email = email;
-        this.password = password;
-        this.name = name;
-        this.phoneNumber = phoneNumber;
-        this.address = address;
-    }
 }

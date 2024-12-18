@@ -1,8 +1,9 @@
-package com.sparta.haengye_project.controller;
+package com.sparta.haengye_project.user.controller;
 
-import com.sparta.haengye_project.dto.UserSignupResponseDto;
-import com.sparta.haengye_project.dto.UserSignupRequestDto;
-import com.sparta.haengye_project.service.UserService;
+
+import com.sparta.haengye_project.user.dto.UserSignupRequestDto;
+import com.sparta.haengye_project.user.dto.UserSignupResponseDto;
+import com.sparta.haengye_project.user.service.UserService;
 import lombok.AllArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -18,8 +19,9 @@ public class UserController {
 
     @PostMapping
     public UserSignupResponseDto signup(@RequestBody UserSignupRequestDto requestDto){
-
         return userService.signup(requestDto);
-
     }
+
+
+
 }
