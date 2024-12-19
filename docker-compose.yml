@@ -43,6 +43,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
       SPRING_REDIS_HOST: haengye_redis  # Redis 서비스 연결
       SPRING_REDIS_PORT: 6379  # Redis 기본 포트
+      JWT_SECRET: ${JWT_SECRET}  # JWT 비밀키 환경변수 설정
     depends_on:
       - mysql_user
       - redis  # Redis 서비스가 준비되면 애플리케이션 실행

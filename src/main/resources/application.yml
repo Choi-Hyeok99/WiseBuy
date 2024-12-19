@@ -42,6 +42,10 @@ spring:
           min-idle: 1                # 최소 아이들 커넥션 수
           max-wait: 10000            # 최대 대기 시간 (ms)
 
+  jwt:
+    secret: ${JWT_SECRET}  # JWT 비밀키 환경변수로 설정
+    expiration: 3600000   # JWT 만료시간 (1시간)
+
 server:
   port: 8090
 
