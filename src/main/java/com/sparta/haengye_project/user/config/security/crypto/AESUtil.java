@@ -1,4 +1,4 @@
-package com.sparta.haengye_project.user.security;
+package com.sparta.haengye_project.user.config.security.crypto;
 
 
 import javax.crypto.Cipher;
