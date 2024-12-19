@@ -1,6 +1,6 @@
 package com.sparta.haengye_project.user.entity;
 
-import com.sparta.haengye_project.user.security.EncryptConverter;
+import com.sparta.haengye_project.user.config.security.crypto.EncryptConverter;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;

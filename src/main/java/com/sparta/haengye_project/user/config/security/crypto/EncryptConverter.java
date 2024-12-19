@@ -1,4 +1,4 @@
-package com.sparta.haengye_project.user.security;
+package com.sparta.haengye_project.user.config.security.crypto;
 
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
