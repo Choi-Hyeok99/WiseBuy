@@ -1,6 +1,7 @@
 package com.sparta.haengye_project.user.controller;
 
 
+import com.sparta.haengye_project.user.dto.ChangePasswordRequestDto;
 import com.sparta.haengye_project.user.dto.UserSignupRequestDto;
 import com.sparta.haengye_project.user.dto.UserSignupResponseDto;
 import com.sparta.haengye_project.user.service.TokenService;
@@ -31,4 +32,11 @@ public class UserController {
             return "잘못된 인증 링크입니다.";
         }
     }
+    // 비밀번호 변경 API
+    @PutMapping("/{userId}/password")
+    public String changePassword(@PathVariable Long userId, @RequestBody ChangePasswordRequestDto requestDto){
+        userService.changePassword(userId,requestDto);
+        return "비밀번호가 변경되었습니다.";
+    }
+
 }
