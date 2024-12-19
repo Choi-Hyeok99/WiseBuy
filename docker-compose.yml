@@ -23,17 +23,29 @@ services:
       start_period: 10s
       timeout: 5s
 
+  redis:
+    image: redis:latest  # Redis 최신 버전 이미지
+    container_name: haengye_redis
+    ports:
+      - "6379:6379"  # Redis 기본 포트
+    networks:
+      - my_network
+    restart: always
+
   haengye_project:
     build: .
     container_name: haengye_project
     ports:
       - "8090:8090"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql_user:3306/user_db  # 동적으로 환경 변수 사용
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql_user:3306/user_db  # MySQL DB 연결
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
+      SPRING_REDIS_HOST: haengye_redis  # Redis 서비스 연결
+      SPRING_REDIS_PORT: 6379  # Redis 기본 포트
     depends_on:
       - mysql_user
+      - redis  # Redis 서비스가 준비되면 애플리케이션 실행
     restart: always
     networks:
       - my_network
