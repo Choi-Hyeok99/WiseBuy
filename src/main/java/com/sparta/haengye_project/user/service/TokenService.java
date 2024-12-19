@@ -32,4 +32,13 @@ public class TokenService {
         }
         return false;
     }
+    // JWT 토큰을 블랙리스트에 추가
+    public void addToBlacklist(String token) {
+        // JWT 토큰을 Redis에 저장하고, 만료 시간을 설정 (예: 24시간)
+        redisTemplate.opsForValue().set(token, "BLACKLISTED", 24, TimeUnit.HOURS);
+    }
+    // 블랙리스트에 있는 토큰인지 확인
+    public boolean isTokenBlacklisted(String token) {
+        return redisTemplate.hasKey(token);
+    }
 }
