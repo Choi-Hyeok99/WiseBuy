@@ -10,19 +10,17 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @AllArgsConstructor
-@RequestMapping("/user/signup")
+@RequestMapping("/user")
 public class UserController {
 
     private final UserService userService;
     private final TokenService tokenService;
 
-
-    @PostMapping
+    // 회원가입 API
+    @PostMapping("/signup")
     public UserSignupResponseDto signup(@RequestBody UserSignupRequestDto requestDto){
         return userService.signup(requestDto);
     }
-
-
     // 이메일 인증 API
     @GetMapping("/verify-email")
     public String verifyEmail(@RequestParam String token, @RequestParam String userEmail) {
