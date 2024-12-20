@@ -1,34 +1,40 @@
 package com.sparta.haengye_project.user.entity;
 
-import com.sparta.haengye_project.user.config.security.crypto.EncryptConverter;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
 
 
 @Entity
 @Data
 @NoArgsConstructor  // 기본 생성자 추가
-@AllArgsConstructor
 public class User {
 
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long userId;
+    private Long id;
 
-    @Column(unique = true, nullable = false)
-    @Convert(converter = EncryptConverter.class) // 암호화된 이메일
+    @Column(nullable = false, unique = true)
     private String email;
 
+    @Column(nullable = false)
     private String password;
 
+    @Column(nullable = false)
     private String name;
 
+    @Column(nullable = false)
     private String phoneNumber;
 
-    @Convert(converter = EncryptConverter.class) // 암호화된 주소
+    @Column(nullable = false)
     private String address;
+
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt = LocalDateTime.now();
+
+
 
 }
