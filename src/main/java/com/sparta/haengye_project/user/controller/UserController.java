@@ -29,18 +29,19 @@ public class UserController {
         return ResponseEntity.ok("인증 토큰이 발송되었습니다.");
     }
 
-    // 회원가입 처리 (이메일 인증 포함)
     @PostMapping("/signup")
-    public ResponseEntity<UserResponseDto> signup(@RequestBody UserRequestDto requestDto,
-                                                  @RequestParam String verificationToken) {
+    public ResponseEntity<UserResponseDto> signup(@RequestBody UserRequestDto requestDto) {
+
         try {
-            UserResponseDto responseDto = userService.signup(requestDto, verificationToken);
+            System.out.println("Request DTO: " + requestDto);
+            UserResponseDto responseDto = userService.signup(requestDto, requestDto.getVerificationToken());
             return ResponseEntity.ok(responseDto);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(null); // 인증 코드 오류나 중복 이메일 발생 시 처리
-        }catch (MessagingException e) {
+        } catch (MessagingException e) {
             return ResponseEntity.status(500)
                                  .body(null);  // 이메일 인증 처리 중 오류 발생 시
         }
     }
+
 }

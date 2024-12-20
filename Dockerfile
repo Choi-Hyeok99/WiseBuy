@@ -7,6 +7,7 @@ WORKDIR /app
 # 빌드된 JAR 파일을 컨테이너로 복사
 COPY ./build/libs/haengye_project-0.0.1-SNAPSHOT.jar /app/haengye_project.jar
 
+RUN apt-get update && apt-get install -y iputils-ping netcat default-mysql-client
 
 # 애플리케이션 실행
 ENTRYPOINT ["java", "-jar", "haengye_project.jar"]
