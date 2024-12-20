@@ -27,30 +27,38 @@ spring:
     password: ${EMAIL_PASSWORD}  # 환경변수로 이메일 비밀번호 참조
     properties:
       mail.smtp.auth: true
-      mail.smtp.starttls.enable: true
+      mail.smtp.starttls.enable: true # TLS 활성화
+      mail.smtp.ssl.enable: true # SSL 활성화
+      mail.smtp.ssl.trust: smtp.naver.com # SSL 인증 설정
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
 
-  # Redis 설정
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
+      host: localhost
+      port: 6379
       timeout: 10000
       lettuce:
         pool:
-          max-active: 10             # 최대 커넥션 수
-          max-idle: 5                # 최대 아이들 커넥션 수
-          min-idle: 1                # 최소 아이들 커넥션 수
-          max-wait: 10000            # 최대 대기 시간 (ms)
+          max-active: 10
+          max-idle: 5
+          min-idle: 1
+          max-wait: 10000
 
-  jwt:
-    secret: ${JWT_SECRET}  # JWT 비밀키 환경변수로 설정
-    expiration: 3600000   # JWT 만료시간 (1시간)
+# JWT 관련 설정 (사용할 경우 주석 해제)
+# jwt:
+#   secret: ${JWT_SECRET}
+#   expiration: 3600000
 
 server:
   port: 8090
 
 logging:
   level:
-    com.sparta.hanghae_restock: INFO
+    com.sparta.hanghae_project: INFO
     org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.springframework.security: DEBUG
+    com.sparta.haengye_project: DEBUG
+
+

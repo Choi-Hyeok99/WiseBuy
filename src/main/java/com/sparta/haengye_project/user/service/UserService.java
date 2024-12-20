@@ -37,7 +37,7 @@ public class UserService {
         // 회원가입 처리
         User user = new User();
         user.setEmail(requestDto.getEmail());
-        user.setPassword(encodedPassword); // 실제로는 암호화 필요
+        user.setPassword(encodedPassword);
         user.setName(requestDto.getName());
         user.setPhoneNumber(requestDto.getPhoneNumber());
         user.setAddress(requestDto.getAddress());
