@@ -47,9 +47,9 @@ spring:
           max-wait: 10000
 
 # JWT 관련 설정 (사용할 경우 주석 해제)
-# jwt:
-#   secret: ${JWT_SECRET}
-#   expiration: 3600000
+  jwt:
+   secret: ${JWT_SECRET}
+   expiration: 1800000
 
 server:
   port: 8090

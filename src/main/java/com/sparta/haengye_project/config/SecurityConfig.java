@@ -1,34 +1,59 @@
 package com.sparta.haengye_project.config;
 
+import com.sparta.haengye_project.jwt.JwtUtil;
+import com.sparta.haengye_project.security.JwtAuthorizationFilter;
+
+import com.sparta.haengye_project.security.UserDetailsServiceImpl;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
-    // BCryptPasswordEncoder 빈 등록
+    private final JwtUtil jwtUtil;
+    private final UserDetailsServiceImpl userDetailsService; // UserDetailsServiceImpl 추가
+    private final AuthenticationManager authenticationManager;  // AuthenticationManager 추가
+
+
+    public SecurityConfig(@Lazy JwtUtil jwtUtil, @Lazy UserDetailsServiceImpl userDetailsService, @Lazy AuthenticationManager authenticationManager) {
+        this.jwtUtil = jwtUtil;
+        this.userDetailsService = userDetailsService;
+        this.authenticationManager = authenticationManager;
+    }
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
-    // HTTP 보안 설정
+    // AuthenticationManager 빈 등록
+    @Bean
+    public AuthenticationManager authenticationManager(HttpSecurity http) throws Exception {
+        AuthenticationManagerBuilder authenticationManagerBuilder = http.getSharedObject(AuthenticationManagerBuilder.class);
+        authenticationManagerBuilder.userDetailsService(userDetailsService).passwordEncoder(passwordEncoder());
+        return authenticationManagerBuilder.build();
+    }
+
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        // csrf 보호 비활성화 (Postman에서 테스트할 때 필요)
         http.csrf().disable()
-            // 인증 없이 접근할 수 있는 URL 설정
             .authorizeRequests()
-            .requestMatchers("/user/send-email", "/user/signup").permitAll()
-            // 인증된 사용자만 접근할 수 있는 URL 설정
-            .anyRequest().authenticated();
+            .requestMatchers("/user/send-email", "/user/signup","/user/login").permitAll()
+            .anyRequest().authenticated()
+            .and()
+            .addFilterBefore(new JwtAuthorizationFilter(jwtUtil, userDetailsService), UsernamePasswordAuthenticationFilter.class); // JWT 인증 필터 추가
+
 
         return http.build();
     }
