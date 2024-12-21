@@ -7,6 +7,7 @@ import com.sparta.haengye_project.security.UserDetailsServiceImpl;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -49,7 +50,9 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http.csrf().disable()
             .authorizeRequests()
-            .requestMatchers("/user/send-email", "/user/signup","/user/login","/products/**").permitAll()
+            .requestMatchers("/user/send-email", "/user/signup","/user/login").permitAll()
+            .requestMatchers(HttpMethod.GET, "/products/**").permitAll()
+            .requestMatchers(HttpMethod.POST, "/products").authenticated()
             .anyRequest().authenticated()
             .and()
             .addFilterBefore(new JwtAuthorizationFilter(jwtUtil, userDetailsService), UsernamePasswordAuthenticationFilter.class); // JWT 인증 필터 추가

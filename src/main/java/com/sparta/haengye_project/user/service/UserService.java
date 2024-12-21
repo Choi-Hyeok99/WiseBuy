@@ -31,6 +31,7 @@ public class UserService {
             throw new EmailAlreadyExistsException("이미 존재하는 이메일입니다.");
         }
 
+
         // 비밀번호 암호화
         String encodedPassword = passwordEncryptionService.encodePassword(requestDto.getPassword());
 
@@ -52,5 +53,9 @@ public class UserService {
     public void sendEmailVerificationToken(String email) throws MessagingException {
         String authCode = emailService.createCode();  // 인증 코드 생성
         emailService.sendEmail(email, authCode);  // 이메일 발송
+    }
+    public User findUserByEmail(String email) {
+        return userRepository.findByEmail(email)
+                             .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다: " + email));
     }
 }

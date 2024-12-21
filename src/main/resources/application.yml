@@ -9,7 +9,7 @@ spring:
         dialect: org.hibernate.dialect.MySQLDialect
         format_sql: true
     hibernate:
-      ddl-auto: update  # MySQL 연결 설정
+      ddl-auto: create  # MySQL 연결 설정
     open-in-view: false
   sql:
     init:
@@ -49,7 +49,7 @@ spring:
 # JWT 관련 설정 (사용할 경우 주석 해제)
   jwt:
    secret: ${JWT_SECRET}
-   expiration: 1800000
+   expiration: 3600000
 
 server:
   port: 8090
