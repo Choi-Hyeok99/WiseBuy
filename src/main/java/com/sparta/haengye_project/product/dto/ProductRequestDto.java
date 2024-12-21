@@ -18,15 +18,15 @@ public class ProductRequestDto {
     @Min(value = 0, message = "재고는 0 이상이어야 합니다.")
     private Integer stock;
 
-    private LocalDateTime startTime;
-    private LocalDateTime endTime;
-
     @NotBlank(message = "상품 가격은 필수 입력값입니다.")
     @Min(value = 0, message = "가격은 0 이상이어야 합니다.")
     private Integer price;
 
     @NotBlank(message = "상품 설명은 필수 입력값입니다.")
     private String description;
+
+    private LocalDateTime startTime;
+    private LocalDateTime endTime;
 
     private String imagePath;
 }
