@@ -1,5 +1,6 @@
 package com.sparta.haengye_project.product.controller;
 
+import com.sparta.haengye_project.product.dto.ProductDetailResponseDto;
 import com.sparta.haengye_project.product.dto.ProductRequestDto;
 import com.sparta.haengye_project.product.dto.ProductResponseDto;
 import com.sparta.haengye_project.product.service.ProductService;
@@ -30,5 +31,10 @@ public class ProductController {
     ){
         Page<ProductResponseDto> products = productService.getProductList(page,size);
         return ResponseEntity.ok(products);
+    }
+    @GetMapping("/{productId}")
+    public ResponseEntity<ProductDetailResponseDto> getProductDetails(@PathVariable Long productId){
+        ProductDetailResponseDto productDetail = productService.getProductDetails(productId);
+        return ResponseEntity.ok(productDetail);
     }
 }
