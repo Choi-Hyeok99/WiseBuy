@@ -2,6 +2,8 @@ package com.sparta.haengye_project.product.repository;
 
 import com.sparta.haengye_project.product.dto.ProductResponseDto;
 import com.sparta.haengye_project.product.entitiy.Product;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
@@ -15,4 +17,6 @@ public interface ProductRepository extends JpaRepository<Product,Long> {
             "JOIN ProductInfo pi ON p.id = pi.product.id")
     List<ProductResponseDto> findAllWithProductInfo();
 
+    @Query("SELECT p FROM Product p WHERE p.stock > 0")
+    Page<Product> findAvailableProducts(Pageable pageable);
 }
