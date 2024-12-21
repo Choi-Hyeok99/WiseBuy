@@ -2,9 +2,11 @@ package com.sparta.haengye_project.security;
 
 import com.sparta.haengye_project.user.entity.User;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
+import java.util.Collections;
 
 public class UserDetailsImpl implements UserDetails {
 
@@ -16,7 +18,11 @@ public class UserDetailsImpl implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return null; // 권한 설정은 필요에 따라 추가
+        String role = "ROLE_" + user.getUserRole().name();
+
+        // GrantedAuthority 객체로 변환
+        return Collections.singleton(new SimpleGrantedAuthority(role));
+
     }
 
     @Override
