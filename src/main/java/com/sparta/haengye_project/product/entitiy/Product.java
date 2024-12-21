@@ -1,5 +1,6 @@
 package com.sparta.haengye_project.product.entitiy;
 
+import com.sparta.haengye_project.product.dto.ProductDetailResponseDto;
 import com.sparta.haengye_project.product.dto.ProductRequestDto;
 import com.sparta.haengye_project.product.dto.ProductResponseDto;
 import jakarta.persistence.*;
@@ -65,6 +66,18 @@ public class Product {
                                                        .atStartOfDay() : null,
                 this.endTime != null ? this.endTime.toLocalDate()
                                                    .atStartOfDay() : null
+        );
+    }
+    public ProductDetailResponseDto toDetailResponseDto() {
+        return new ProductDetailResponseDto(
+                this.id,
+                this.productName,
+                this.stock,
+                this.productInfo.getPrice(),
+                this.productInfo.getDescription(),
+                this.productInfo.getImagePath(),
+                this.startTime != null ? this.startTime.toString() : null,
+                this.endTime != null ? this.endTime.toString() : null
         );
     }
 }

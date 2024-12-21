@@ -29,4 +29,5 @@ public class ProductDetailResponseDto {
         this.startTime = startTime;
         this.endTime = endTime;
     }
+
 }
