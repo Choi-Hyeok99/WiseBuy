@@ -5,6 +5,7 @@ import com.sparta.haengye_project.product.dto.ProductRequestDto;
 import com.sparta.haengye_project.product.dto.ProductResponseDto;
 import com.sparta.haengye_project.product.entitiy.Product;
 import com.sparta.haengye_project.product.repository.ProductRepository;
+import com.sparta.haengye_project.user.entity.User;
 import lombok.AllArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -20,12 +21,11 @@ public class ProductService {
 
     private final ProductRepository productRepository;
 
-    public ProductResponseDto createProduct(ProductRequestDto requestDto) {
+    public ProductResponseDto createProduct(ProductRequestDto requestDto, User user) {
 
         Product product = Product.fromRequestDto(requestDto);
-
+        product.setUser(user);  // 반드시 user를 설정해야 합니다.
         Product savedProduct = productRepository.save(product);
-
         return savedProduct.toResponseDto();
 
     }

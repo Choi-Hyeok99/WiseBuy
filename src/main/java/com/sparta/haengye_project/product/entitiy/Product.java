@@ -3,6 +3,7 @@ package com.sparta.haengye_project.product.entitiy;
 import com.sparta.haengye_project.product.dto.ProductDetailResponseDto;
 import com.sparta.haengye_project.product.dto.ProductRequestDto;
 import com.sparta.haengye_project.product.dto.ProductResponseDto;
+import com.sparta.haengye_project.user.entity.User;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -35,6 +36,11 @@ public class Product {
 
     @OneToOne(mappedBy = "product", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private ProductInfo productInfo; // 상세 정보와 1:1 관계
+
+    // **N:1 관계 매핑**
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
 
 
     // DTO -> Entity 변환
