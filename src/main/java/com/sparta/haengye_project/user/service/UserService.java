@@ -3,6 +3,7 @@ package com.sparta.haengye_project.user.service;
 import com.sparta.haengye_project.user.dto.UserRequestDto;
 import com.sparta.haengye_project.user.dto.UserResponseDto;
 import com.sparta.haengye_project.user.entity.User;
+import com.sparta.haengye_project.user.entity.UserRole;
 import com.sparta.haengye_project.user.repository.UserRepository;
 import jakarta.mail.MessagingException;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,9 @@ public class UserService {
         user.setName(requestDto.getName());
         user.setPhoneNumber(requestDto.getPhoneNumber());
         user.setAddress(requestDto.getAddress());
+
+        // **기본 역할 설정 추가**
+        user.setUserRole(UserRole.USER); // 일반 사용자 역할로 설정
 
         userRepository.save(user);
 
