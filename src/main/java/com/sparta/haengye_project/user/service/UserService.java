@@ -47,13 +47,7 @@ public class UserService {
 
         userRepository.save(user);
 
-        // ResponseDto로 반환
-        return new UserResponseDto(
-                user.getEmail(),
-                user.getName(),
-                user.getPhoneNumber(),
-                user.getAddress()
-        );
+        return user.toResponseDto();
     }
     public void sendEmailVerificationToken(String email) throws MessagingException {
         String authCode = emailService.createCode();  // 인증 코드 생성

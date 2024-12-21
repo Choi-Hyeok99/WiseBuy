@@ -1,5 +1,6 @@
 package com.sparta.haengye_project.user.entity;
 
+import com.sparta.haengye_project.user.dto.UserResponseDto;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -46,5 +47,14 @@ public class User {
         this.address = address;
         this.userRole = userRole;
         this.createdAt = LocalDateTime.now(); // 자동 설정
+    }
+    // User -> UserResponseDto 변환 메서드
+    public UserResponseDto toResponseDto() {
+        return new UserResponseDto(
+                this.email,
+                this.name,
+                this.phoneNumber,
+                this.address
+        );
     }
 }
