@@ -3,6 +3,7 @@ package com.sparta.haengye_project.product.controller;
 import com.sparta.haengye_project.product.dto.ProductDetailResponseDto;
 import com.sparta.haengye_project.product.dto.ProductRequestDto;
 import com.sparta.haengye_project.product.dto.ProductResponseDto;
+import com.sparta.haengye_project.product.exception.NotFoundException;
 import com.sparta.haengye_project.product.service.ProductService;
 import com.sparta.haengye_project.user.entity.User;
 import com.sparta.haengye_project.user.service.UserService;
