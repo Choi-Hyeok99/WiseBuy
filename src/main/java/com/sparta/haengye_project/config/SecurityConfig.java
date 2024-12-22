@@ -52,11 +52,11 @@ public class SecurityConfig {
             .authorizeRequests()
             .requestMatchers("/user/send-email", "/user/signup","/user/login").permitAll()
             .requestMatchers(HttpMethod.GET, "/products/**").permitAll()
-            .requestMatchers(HttpMethod.POST, "/products").authenticated()
+            .requestMatchers(HttpMethod.GET, "/wishlist/**").authenticated() // GET 요청에 대한 인증 필요 추가
+            .requestMatchers(HttpMethod.POST, "/wishlist/**").authenticated()
             .anyRequest().authenticated()
             .and()
-            .addFilterBefore(new JwtAuthorizationFilter(jwtUtil, userDetailsService), UsernamePasswordAuthenticationFilter.class); // JWT 인증 필터 추가
-
+            .addFilterBefore(new JwtAuthorizationFilter(jwtUtil, userDetailsService), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

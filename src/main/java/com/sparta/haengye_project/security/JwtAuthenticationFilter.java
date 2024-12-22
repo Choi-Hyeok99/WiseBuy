@@ -2,48 +2,53 @@ package com.sparta.haengye_project.security;
 
 
 import com.sparta.haengye_project.jwt.JwtUtil;
+import com.sparta.haengye_project.user.repository.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.ArrayList;
-
+@Slf4j
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;  // JwtUtil 클래스 사용
+    private final UserDetailsServiceImpl userDetailsService;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil) {
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, UserRepository userRepository, UserDetailsServiceImpl userDetailsService) {
         this.jwtUtil = jwtUtil;
+        this.userDetailsService = userDetailsService;
     }
+
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-
-        // Authorization 헤더에서 JWT 토큰을 가져옵니다.
         String token = getTokenFromRequest(request);
 
         if (token != null && jwtUtil.validateToken(token)) {
-            // 유효한 토큰일 경우 사용자 정보 설정
-            String email = jwtUtil.getUserEmailFromToken(token);  // JwtUtil에서 이메일 정보 추출
-            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(email, null, new ArrayList<>());
+            String email = jwtUtil.getUserEmailFromToken(token);
+            UserDetailsImpl userDetails = (UserDetailsImpl) userDetailsService.loadUserByUsername(email);
+
+            // UserDetailsImpl을 SecurityContext에 저장
+            UsernamePasswordAuthenticationToken authentication =
+                    new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
             SecurityContextHolder.getContext().setAuthentication(authentication);
         }
 
-        filterChain.doFilter(request, response);  // 필터 체인을 통해 다음 필터로 넘어갑니다.
+        filterChain.doFilter(request, response);
     }
 
     // 헤더에서 JWT 토큰을 가져오는 메서드
     private String getTokenFromRequest(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
         if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
-            return bearerToken.substring(7);  // "Bearer " 이후의 토큰 값
+            return bearerToken.substring(7);
         }
-        return null;  // 토큰이 없다면 null 반환
+        return null;
     }
 }
