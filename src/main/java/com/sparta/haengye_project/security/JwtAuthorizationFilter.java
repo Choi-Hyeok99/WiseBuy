@@ -1,6 +1,8 @@
 package com.sparta.haengye_project.security;
 
 import com.sparta.haengye_project.jwt.JwtUtil;
+import com.sparta.haengye_project.security.UserDetailsImpl;
+import com.sparta.haengye_project.security.UserDetailsServiceImpl;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -11,6 +13,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+
 @Slf4j
 public class JwtAuthorizationFilter extends OncePerRequestFilter {
 
@@ -25,6 +28,7 @@ public class JwtAuthorizationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
+        // 요청 헤더에서 토큰 추출
         String token = getTokenFromRequest(request);
 
         // 로그 추가
@@ -32,12 +36,21 @@ public class JwtAuthorizationFilter extends OncePerRequestFilter {
         log.info("Extracted Token: {}", token);
 
         if (token != null && jwtUtil.validateToken(token)) {
+            // 토큰에서 이메일 추출
             String email = jwtUtil.getUserEmailFromToken(token);
+            log.info("Authenticated email from token: {}", email);
+
+            // UserDetailsService로 유저 정보 로드
+            UserDetailsImpl userDetails = (UserDetailsImpl) userDetailsService.loadUserByUsername(email);
+            log.info("UserDetails loaded: {}", userDetails.getUsername());
+
+            // SecurityContextHolder에 인증 정보 설정
             UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(email, null, userDetailsService.loadUserByUsername(email).getAuthorities());
+                    new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
             SecurityContextHolder.getContext().setAuthentication(authentication);
         }
 
+        // 필터 체인 계속 진행
         filterChain.doFilter(request, response);
     }
 
