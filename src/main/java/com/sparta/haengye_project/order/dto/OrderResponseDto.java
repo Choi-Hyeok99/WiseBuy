@@ -29,6 +29,7 @@ public class OrderResponseDto {
         this.orderId = order.getId();
         this.orderDate = order.getOrderDate();
         this.deliveryDate = order.getDeliveryDate();
+        this.shippingAddress = order.getShippingAddress();
         this.cancelDate = order.getCancelDate();
         this.totalAmount = order.getTotalAmount();
         this.status = order.getStatus().name();
@@ -36,6 +37,4 @@ public class OrderResponseDto {
                           .map(OrderItemResponseDto::new)
                           .collect(Collectors.toList());
     }
-
-
 }
