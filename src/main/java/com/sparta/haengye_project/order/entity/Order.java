@@ -12,6 +12,7 @@ import java.util.List;
 @Entity
 @Getter
 @Setter
+@Table(name = "orders") // 예약어를 피하기 위해 테이블 이름 변경
 public class Order {
 
     @Id
@@ -36,7 +37,7 @@ public class Order {
 
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
-    private OrderStatus status; // 주문 상태 (ENUM: PENDING, CANCELLED, COMPLETED 등)
+    private OrderStatus status = OrderStatus.PENDING; // 주문 상태 (ENUM: PENDING, CANCELLED, COMPLETED 등)
 
     @Column(nullable = false)
     private int totalAmount; // 주문 총 금액
