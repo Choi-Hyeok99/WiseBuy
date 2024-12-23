@@ -121,10 +121,21 @@ public class WishlistService {
         );
     }
 
+    @Transactional
+    public void deleteWishlistItem(Long id, User user) {
+        // 위시리스트 항목 조회 (사용자와 연관된 항목인지 확인)
+        WishListItem wishlistItem = wishListItemRepository.findByIdAndWishlist(id, user.getWishlist())
+                                                          .orElseThrow(() -> new IllegalArgumentException("해당 위시리스트 항목이 없습니다."));
+
+        // 위시리스트 항목 삭제
+        wishListItemRepository.delete(wishlistItem);
+    }
+
     // 위시리스트 생성 메서드
     private Wishlist createNewWishList(User user) {
         Wishlist wishlist = new Wishlist();
         wishlist.setUser(user); // 유저와 연결
         return wishlistRepository.save(wishlist); // DB에 저장
     }
+
 }
