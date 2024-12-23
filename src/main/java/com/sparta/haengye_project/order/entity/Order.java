@@ -20,7 +20,7 @@ public class Order {
     private Long id; // 주문 번호
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user+id",nullable = false)
+    @JoinColumn(name = "user_id",nullable = false)
     private User user; // 회원과 연관 관계 ( N : 1 )
 
     @OneToMany(mappedBy = "order",cascade = CascadeType.ALL, orphanRemoval = true)

@@ -87,7 +87,7 @@ public class OrderService {
         return new OrderResponseDto(order);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<OrderResponseDto> getOrders(User user) {
         // 사용자에 대한 모든 주문 조회
         List<Order> orders = orderRepository.findAllByUser(user);
@@ -102,8 +102,6 @@ public class OrderService {
             List<OrderItem> orderItems = order.getOrderItems();
             for (int j = 0; j < orderItems.size(); j++) {
                 OrderItem item = orderItems.get(j);
-                OrderItemStatus itemStatus = calculateOrderItemStatus(order.getOrderDate());
-                item.setStatus(itemStatus);
 
                 items.add(new OrderItemResponseDto(
                         item.getProduct().getId(),
@@ -127,14 +125,5 @@ public class OrderService {
         }
 
         return responseDtos;
-    }
-    private OrderItemStatus calculateOrderItemStatus(LocalDateTime orderDate) {
-        LocalDateTime now = LocalDateTime.now();
-        if (now.isAfter(orderDate.plusDays(2))) {
-            return OrderItemStatus.DELIVERED;
-        } else if (now.isAfter(orderDate.plusDays(1))) {
-            return OrderItemStatus.SHIPPED;
-        }
-        return OrderItemStatus.ORDERED;
     }
 }

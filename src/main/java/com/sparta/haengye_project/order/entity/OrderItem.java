@@ -40,7 +40,8 @@ public class OrderItem {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private OrderItemStatus status; // 기본값 설정
+    private OrderItemStatus status = OrderItemStatus.ORDERED;
+
 
 
 
