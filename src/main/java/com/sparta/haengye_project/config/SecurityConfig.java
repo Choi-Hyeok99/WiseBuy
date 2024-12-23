@@ -55,6 +55,7 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.GET, "/wishlist/**").authenticated() // GET 요청에 대한 인증 필요 추가
             .requestMatchers(HttpMethod.POST, "/wishlist/**").authenticated()
             .requestMatchers(HttpMethod.PUT, "/wishlist/**").authenticated()
+            .requestMatchers(HttpMethod.DELETE, "/wishlist/**").authenticated()
             .anyRequest().authenticated()
             .and()
             .addFilterBefore(new JwtAuthorizationFilter(jwtUtil, userDetailsService), UsernamePasswordAuthenticationFilter.class);

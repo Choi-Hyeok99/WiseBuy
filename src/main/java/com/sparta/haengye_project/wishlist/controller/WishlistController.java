@@ -98,4 +98,23 @@ public class WishlistController {
         log.info("Successfully updated wishlist item: {}", updatedItem);
         return ResponseEntity.ok(updatedItem);
     }
+    @DeleteMapping("/wishlist/{id}")
+    public ResponseEntity<String> deleteWishlistItem(@PathVariable Long id){
+        // SecurityContext에서 인증된 사용자 가져오기
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof UserDetailsImpl)) {
+            throw new IllegalStateException("인증된 사용자 정보가 없습니다.");
+        }
+
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        User user = userDetails.getUser();
+
+
+        // 서비스 호출하여 삭제 처리
+        wishlistService.deleteWishlistItem(id, user);
+
+
+        log.info("Successfully deleted wishlist item with id: {}", id);
+        return ResponseEntity.ok("Wishlist item deleted successfully.");
+    }
 }
