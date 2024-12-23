@@ -1,6 +1,7 @@
 package com.sparta.haengye_project.order.dto;
 
 import com.sparta.haengye_project.order.entity.Order;
+import com.sparta.haengye_project.order.entity.OrderStatus;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -36,5 +37,17 @@ public class OrderResponseDto {
         this.items = order.getOrderItems().stream()
                           .map(OrderItemResponseDto::new)
                           .collect(Collectors.toList());
+    }
+
+    // 새로운 생성자 (조회 시 사용)
+    public OrderResponseDto(Long id, LocalDateTime orderDate, String shippingAddress, OrderStatus status, int totalAmount, LocalDateTime deliveryDate, LocalDateTime cancelDate, List<OrderItemResponseDto> items) {
+        this.orderId = id;
+        this.orderDate = orderDate;
+        this.shippingAddress = shippingAddress;
+        this.status = status.name();
+        this.totalAmount = totalAmount;
+        this.deliveryDate = deliveryDate;
+        this.cancelDate = cancelDate;
+        this.items = items;
     }
 }

@@ -1,5 +1,6 @@
 package com.sparta.haengye_project.order.service;
 
+import com.sparta.haengye_project.order.dto.OrderItemResponseDto;
 import com.sparta.haengye_project.order.dto.OrderRequestDto;
 import com.sparta.haengye_project.order.dto.OrderResponseDto;
 import com.sparta.haengye_project.order.entity.Order;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -83,5 +85,56 @@ public class OrderService {
        // 6. 주문 저장
         orderRepository.save(order);
         return new OrderResponseDto(order);
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrderResponseDto> getOrders(User user) {
+        // 사용자에 대한 모든 주문 조회
+        List<Order> orders = orderRepository.findAllByUser(user);
+        List<OrderResponseDto> responseDtos = new ArrayList<>();
+
+        // 주문 목록 처리
+        for (int i = 0; i < orders.size(); i++) {
+            Order order = orders.get(i);
+            List<OrderItemResponseDto> items = new ArrayList<>();
+
+            // 각 주문 항목의 상태 계산
+            List<OrderItem> orderItems = order.getOrderItems();
+            for (int j = 0; j < orderItems.size(); j++) {
+                OrderItem item = orderItems.get(j);
+                OrderItemStatus itemStatus = calculateOrderItemStatus(order.getOrderDate());
+                item.setStatus(itemStatus);
+
+                items.add(new OrderItemResponseDto(
+                        item.getProduct().getId(),
+                        item.getProduct().getProductName(),
+                        item.getQuantity(),
+                        item.getPrice(),
+                        item.getStatus().name()
+                ));
+            }
+            // OrderResponseDto로 변환하여 추가
+            responseDtos.add(new OrderResponseDto(
+                    order.getId(),
+                    order.getOrderDate(),
+                    order.getShippingAddress(),
+                    order.getStatus(),
+                    order.getTotalAmount(),
+                    order.getDeliveryDate(),
+                    order.getCancelDate(),
+                    items
+            ));
+        }
+
+        return responseDtos;
+    }
+    private OrderItemStatus calculateOrderItemStatus(LocalDateTime orderDate) {
+        LocalDateTime now = LocalDateTime.now();
+        if (now.isAfter(orderDate.plusDays(2))) {
+            return OrderItemStatus.DELIVERED;
+        } else if (now.isAfter(orderDate.plusDays(1))) {
+            return OrderItemStatus.SHIPPED;
+        }
+        return OrderItemStatus.ORDERED;
     }
 }
