@@ -12,9 +12,7 @@ import java.util.Optional;
 @Repository
 public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findAllByUser(User user); // 사용자의 모든 주문 조회
-
     List<Order> findAllByStatusIn(List<OrderStatus> statuses);
-
-
+    List<Order> findAllByStatus(OrderStatus status);
     Optional<Order> findByIdAndUser(Long orderId, User user);
 }
