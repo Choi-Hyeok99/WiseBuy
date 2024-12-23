@@ -150,4 +150,36 @@ public class OrderService {
 
         orderRepository.save(order);
     }
+
+    @Transactional
+    public void returnOrder(Long orderId, User user) {
+        Order order = orderRepository.findById(orderId)
+                                     .orElseThrow(() -> new IllegalArgumentException("해당 주문을 찾을 수 없습니다."));
+
+        // 사용자 비교: ID 기반으로 수정
+        if (!order.getUser().getId().equals(user.getId())) {
+            throw new IllegalArgumentException("본인의 주문만 반품할 수 있습니다.");
+        }
+
+        // 반품 가능 상태 확인
+        if (!order.getStatus().equals(OrderStatus.COMPLETED)) {
+            throw new IllegalStateException("배송 완료된 주문만 반품할 수 있습니다.");
+        }
+
+        // 반품 가능 시간 확인
+        LocalDateTime now = LocalDateTime.now();
+        if (now.isAfter(order.getDeliveryDate().plusMinutes(10))) { // D+1 기준
+            throw new IllegalStateException("반품 가능 기간이 지났습니다.");
+        }
+
+        // 주문 상태 변경
+        order.setStatus(OrderStatus.RETURN_REQUESTED);
+
+        // 주문 항목 상태 변경
+        for (OrderItem item : order.getOrderItems()) {
+            item.setStatus(OrderItemStatus.RETURN_REQUESTED);
+        }
+
+        orderRepository.save(order);
+    }
 }

@@ -60,5 +60,17 @@ public class OrderController {
         return ResponseEntity.ok("주문이 취소되었습니다. ");
     }
 
+    // 4. 반품 요청
+    @PatchMapping("/{orderId}/return")
+    public ResponseEntity<String> returnOrder(@PathVariable Long orderId){
 
+        // 유저 확인
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        User user = userDetails.getUser();
+
+        orderService.returnOrder(orderId,user);
+        return ResponseEntity.ok("주문 반품 요청이 접수되었습니다. ");
+
+    }
 }

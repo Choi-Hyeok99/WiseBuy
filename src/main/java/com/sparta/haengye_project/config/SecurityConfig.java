@@ -59,7 +59,7 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.POST,"/orders/**").authenticated()
             .requestMatchers(HttpMethod.GET,"/orders/**").authenticated()
             .requestMatchers(HttpMethod.DELETE,"/orders/**").authenticated()
-
+            .requestMatchers(HttpMethod.PATCH,"/orders/**").authenticated()
 
 
             .anyRequest().authenticated()
