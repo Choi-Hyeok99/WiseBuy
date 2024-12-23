@@ -2,6 +2,7 @@ package com.sparta.haengye_project.user.entity;
 
 import com.sparta.haengye_project.product.entitiy.Product;
 import com.sparta.haengye_project.user.dto.UserResponseDto;
+import com.sparta.haengye_project.wishlist.entity.Wishlist;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -45,6 +46,9 @@ public class User {
     // **1:N 관계 매핑**
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Product> products = new ArrayList<>();
+
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Wishlist wishlist;
 
 
     public User(String email, String password, String name, String phoneNumber, String address, UserRole userRole) {
