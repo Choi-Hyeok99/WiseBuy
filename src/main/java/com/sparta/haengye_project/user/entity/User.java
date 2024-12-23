@@ -1,5 +1,6 @@
 package com.sparta.haengye_project.user.entity;
 
+import com.sparta.haengye_project.order.entity.Order;
 import com.sparta.haengye_project.product.entitiy.Product;
 import com.sparta.haengye_project.user.dto.UserResponseDto;
 import com.sparta.haengye_project.wishlist.entity.Wishlist;
@@ -49,6 +50,9 @@ public class User {
 
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private Wishlist wishlist;
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL,orphanRemoval = true)
+    private List<Order> orders = new ArrayList<>();
 
 
     public User(String email, String password, String name, String phoneNumber, String address, UserRole userRole) {
