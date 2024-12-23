@@ -38,9 +38,9 @@ public class OrderItem {
     @Column(nullable = true)
     private LocalDateTime returnDate; // 반품 완료일
 
-    @Column(nullable = false)
     @Enumerated(EnumType.STRING)
-    private OrderItemStatus status; // 주문 항목 상태 (ENUM: ORDERED, CANCELLED, RETURNED 등)
+    @Column(nullable = false)
+    private OrderItemStatus status; // 기본값 설정
 
 
 
