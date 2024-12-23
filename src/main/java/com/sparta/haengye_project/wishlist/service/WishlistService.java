@@ -7,6 +7,7 @@ import com.sparta.haengye_project.user.entity.User;
 import com.sparta.haengye_project.wishlist.dto.WishlistItemDto;
 import com.sparta.haengye_project.wishlist.dto.WishlistRequestDto;
 import com.sparta.haengye_project.wishlist.dto.WishlistResponseDto;
+import com.sparta.haengye_project.wishlist.dto.WishlistUpdateRequestDto;
 import com.sparta.haengye_project.wishlist.entity.WishListItem;
 import com.sparta.haengye_project.wishlist.entity.Wishlist;
 import com.sparta.haengye_project.wishlist.repository.WishListItemRepository;
@@ -95,6 +96,31 @@ public class WishlistService {
                        })
                        .toList();
     }
+    @Transactional
+    public WishlistResponseDto updateWishlistItem(Long id, WishlistUpdateRequestDto updateRequestDto, User user) {
+        // 유저의 위시리스트 가져오기
+        Wishlist wishlist = wishlistRepository.findByUser(user)
+                                              .orElseThrow(() -> new IllegalArgumentException("해당 유저의 위시리스트가 없습니다."));
+
+        // 위시리스트 항목 찾기 (위시리스트와 연결된 항목인지 확인)
+        WishListItem wishlistItem = wishListItemRepository.findByIdAndWishlist(id, wishlist)
+                                                          .orElseThrow(() -> new IllegalArgumentException("해당 위시리스트 항목이 없습니다."));
+
+        // 수량 수정
+        wishlistItem.setQuantity(updateRequestDto.getQuantity());
+
+        // 저장
+        wishListItemRepository.save(wishlistItem);
+
+        // 응답 DTO 생성 및 반환
+        return new WishlistResponseDto(
+                wishlistItem.getId(),
+                wishlistItem.getProduct().getId(),
+                wishlistItem.getProduct().getProductName(),
+                wishlistItem.getQuantity()
+        );
+    }
+
     // 위시리스트 생성 메서드
     private Wishlist createNewWishList(User user) {
         Wishlist wishlist = new Wishlist();

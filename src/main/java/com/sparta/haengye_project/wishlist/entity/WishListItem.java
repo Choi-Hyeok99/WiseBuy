@@ -25,5 +25,12 @@ public class WishListItem {
     @Column(nullable = false)
     private int quantity;
 
+    // 수량 변경 메서드
+    public void setQuantity(Integer quantity) {
+        if (quantity < 1) {
+            throw new IllegalArgumentException("수량은 1 이상이어야 합니다.");
+        }
+        this.quantity = quantity;
+    }
 
 }
