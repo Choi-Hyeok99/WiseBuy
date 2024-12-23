@@ -58,6 +58,9 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.DELETE, "/wishlist/**").authenticated()
             .requestMatchers(HttpMethod.POST,"/orders/**").authenticated()
             .requestMatchers(HttpMethod.GET,"/orders/**").authenticated()
+            .requestMatchers(HttpMethod.DELETE,"/orders/**").authenticated()
+
+
 
             .anyRequest().authenticated()
             .and()

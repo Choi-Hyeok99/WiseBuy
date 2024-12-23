@@ -126,4 +126,28 @@ public class OrderService {
 
         return responseDtos;
     }
+
+    @Transactional
+    public void cancelOrder(Long orderId, User user) {
+        Order order = orderRepository.findByIdAndUser(orderId, user)
+                                     .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다."));
+
+        // 주문 상태 확인
+        if (!order.getStatus().equals(OrderStatus.PENDING)) {
+            throw new IllegalStateException("배송 중 상태에서는 주문을 취소할 수 없습니다.");
+        }
+
+        // 주문 상태 변경
+        order.setStatus(OrderStatus.CANCELLED);
+        order.setCancelDate(LocalDateTime.now());
+
+        // 주문 항목 상태 변경 및 재고 복구
+        for (OrderItem item : order.getOrderItems()) {
+            item.setStatus(OrderItemStatus.RETURNED);
+            Product product = item.getProduct();
+            product.setStock(product.getStock() + item.getQuantity()); // 재고 복구
+        }
+
+        orderRepository.save(order);
+    }
 }
