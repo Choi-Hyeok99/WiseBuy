@@ -8,6 +8,7 @@ import com.sparta.haengye_project.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
@@ -47,5 +48,17 @@ public class OrderController {
         return ResponseEntity.ok(orders);
 
     }
+    // 3. 주문 취소
+    @DeleteMapping("/{orderId}")
+    public ResponseEntity<String> cancelOrder(@PathVariable Long orderId){
+
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        User user = userDetails.getUser();
+
+        orderService.cancelOrder(orderId,user);
+        return ResponseEntity.ok("주문이 취소되었습니다. ");
+    }
+
 
 }
