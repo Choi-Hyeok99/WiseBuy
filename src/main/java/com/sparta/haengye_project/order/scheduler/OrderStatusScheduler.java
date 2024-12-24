@@ -21,7 +21,7 @@ public class OrderStatusScheduler {
         this.orderRepository = orderRepository;
     }
 
-    @Scheduled(fixedRate = 600000) // 10분 주기로 실행
+    @Scheduled(fixedRate = 300000) // 5분 주기로 실행
     @Transactional
     public void updateOrderStatuses() {
         // 상태가 PENDING 또는 SHIPPED인 주문을 조회
@@ -31,9 +31,9 @@ public class OrderStatusScheduler {
             LocalDateTime now = LocalDateTime.now();
 
             // 주문 상태 업데이트
-            if (now.isAfter(order.getOrderDate().plusMinutes(20))) {
+            if (now.isAfter(order.getOrderDate().plusMinutes(10))) {
                 order.setStatus(OrderStatus.COMPLETED); // 배송 완료
-            } else if (now.isAfter(order.getOrderDate().plusMinutes(10))) {
+            } else if (now.isAfter(order.getOrderDate().plusMinutes(5))) {
                 order.setStatus(OrderStatus.SHIPPED); // 배송 중
             }
 
@@ -54,7 +54,7 @@ public class OrderStatusScheduler {
         orderRepository.flush(); // 강제 동기화
     }
 
-    @Scheduled(fixedRate = 600000) // 10분 주기로 실행
+    @Scheduled(fixedRate = 400000, initialDelay = 30000) // 5분 주기로 실행
     @Transactional
     public void processReturns() {
         // RETURN_REQUESTED 상태의 주문 조회
@@ -63,15 +63,14 @@ public class OrderStatusScheduler {
         for (Order order : returnRequestedOrders) {
             LocalDateTime now = LocalDateTime.now();
 
-            // 반품 처리 가능 시간 확인 (반품 요청 후 10분 경과)
+            // 반품 처리 가능 시간 확인 (반품 요청 후 10분 전)
             if (now.isAfter(order.getDeliveryDate().plusMinutes(10))) {
                 // 상태 변경
-                order.setStatus(OrderStatus.CANCELLED);
+                order.setStatus(OrderStatus.RETURN);
 
                 // 주문 항목 상태 변경 및 재고 복구
                 for (OrderItem item : order.getOrderItems()) {
                     item.setStatus(OrderItemStatus.RETURNED);
-
                     // 재고 복구
                     item.getProduct().setStock(item.getProduct().getStock() + item.getQuantity());
                 }
