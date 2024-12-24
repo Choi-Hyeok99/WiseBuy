@@ -7,12 +7,15 @@ import com.sparta.haengye_project.order.entity.Order;
 import com.sparta.haengye_project.order.entity.OrderItem;
 import com.sparta.haengye_project.order.entity.OrderItemStatus;
 import com.sparta.haengye_project.order.entity.OrderStatus;
+import com.sparta.haengye_project.order.exception.InvalidOrderStateException;
+import com.sparta.haengye_project.order.exception.OrderNotFoundException;
 import com.sparta.haengye_project.order.repository.OrderRepository;
 import com.sparta.haengye_project.product.entitiy.Product;
 import com.sparta.haengye_project.product.repository.ProductRepository;
 import com.sparta.haengye_project.user.entity.User;
 import com.sparta.haengye_project.wishlist.entity.WishListItem;
 import com.sparta.haengye_project.wishlist.entity.Wishlist;
+import com.sparta.haengye_project.wishlist.exception.WishlistNotFoundException;
 import com.sparta.haengye_project.wishlist.repository.WishlistRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -36,7 +39,7 @@ public class OrderService {
 
         // 1. 위시리스트 확인
         Wishlist wishlist = wishlistRepository.findByUser(user)
-                .orElseThrow(()-> new IllegalArgumentException("위시리트가 존재하지 않습니다."));
+                .orElseThrow(()-> new WishlistNotFoundException("위시리트가 존재하지 않습니다."));
 
         List<WishListItem> wishListItems = wishlist.getItems();
 
@@ -130,11 +133,11 @@ public class OrderService {
     @Transactional
     public void cancelOrder(Long orderId, User user) {
         Order order = orderRepository.findByIdAndUser(orderId, user)
-                                     .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다."));
+                                     .orElseThrow(() -> new OrderNotFoundException("주문을 찾을 수 없습니다."));
 
         // 주문 상태 확인
         if (!order.getStatus().equals(OrderStatus.PENDING)) {
-            throw new IllegalStateException("배송 중 상태에서는 주문을 취소할 수 없습니다.");
+            throw new InvalidOrderStateException("배송 중 상태에서는 주문을 취소할 수 없습니다.");
         }
 
         // 주문 상태 변경
@@ -154,7 +157,7 @@ public class OrderService {
     @Transactional
     public void returnOrder(Long orderId, User user) {
         Order order = orderRepository.findById(orderId)
-                                     .orElseThrow(() -> new IllegalArgumentException("해당 주문을 찾을 수 없습니다."));
+                                     .orElseThrow(() -> new OrderNotFoundException("해당 주문을 찾을 수 없습니다."));
 
         // 사용자 비교: ID 기반으로 수정
         if (!order.getUser().getId().equals(user.getId())) {
