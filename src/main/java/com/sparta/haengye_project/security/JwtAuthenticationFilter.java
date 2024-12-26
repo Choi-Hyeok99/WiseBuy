@@ -1,7 +1,7 @@
 package com.sparta.haengye_project.security;
 
 
-import com.sparta.haengye_project.jwt.JwtUtil;
+import com.sparta.haengye_project.user.jwt.JwtUtil;
 import com.sparta.haengye_project.user.repository.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

@@ -1,6 +1,6 @@
-package com.sparta.haengye_project.config;
+package com.sparta.haengye_project.user.config;
 
-import com.sparta.haengye_project.jwt.JwtUtil;
+import com.sparta.haengye_project.user.jwt.JwtUtil;
 import com.sparta.haengye_project.security.JwtAuthorizationFilter;
 
 import com.sparta.haengye_project.security.UserDetailsServiceImpl;

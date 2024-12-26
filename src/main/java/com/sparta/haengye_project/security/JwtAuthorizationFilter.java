@@ -1,8 +1,6 @@
 package com.sparta.haengye_project.security;
 
-import com.sparta.haengye_project.jwt.JwtUtil;
-import com.sparta.haengye_project.security.UserDetailsImpl;
-import com.sparta.haengye_project.security.UserDetailsServiceImpl;
+import com.sparta.haengye_project.user.jwt.JwtUtil;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
