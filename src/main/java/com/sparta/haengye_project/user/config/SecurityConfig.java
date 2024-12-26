@@ -1,9 +1,9 @@
 package com.sparta.haengye_project.user.config;
 
 import com.sparta.haengye_project.user.jwt.JwtUtil;
-import com.sparta.haengye_project.security.JwtAuthorizationFilter;
+import com.sparta.haengye_project.user.security.JwtAuthorizationFilter;
 
-import com.sparta.haengye_project.security.UserDetailsServiceImpl;
+import com.sparta.haengye_project.user.security.UserDetailsServiceImpl;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
