@@ -3,12 +3,11 @@ package com.sparta.haengye_project.order.controller;
 import com.sparta.haengye_project.order.dto.OrderRequestDto;
 import com.sparta.haengye_project.order.dto.OrderResponseDto;
 import com.sparta.haengye_project.order.service.OrderService;
-import com.sparta.haengye_project.security.UserDetailsImpl;
+import com.sparta.haengye_project.user.security.UserDetailsImpl;
 import com.sparta.haengye_project.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 

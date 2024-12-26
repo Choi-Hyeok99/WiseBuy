@@ -1,4 +1,4 @@
-package com.sparta.haengye_project.security;
+package com.sparta.haengye_project.user.security;
 
 import com.sparta.haengye_project.user.jwt.JwtUtil;
 import jakarta.servlet.FilterChain;

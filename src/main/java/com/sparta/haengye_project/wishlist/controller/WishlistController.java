@@ -1,6 +1,6 @@
 package com.sparta.haengye_project.wishlist.controller;
 
-import com.sparta.haengye_project.security.UserDetailsImpl;
+import com.sparta.haengye_project.user.security.UserDetailsImpl;
 import com.sparta.haengye_project.user.entity.User;
 import com.sparta.haengye_project.wishlist.dto.WishlistItemDto;
 import com.sparta.haengye_project.wishlist.dto.WishlistRequestDto;
