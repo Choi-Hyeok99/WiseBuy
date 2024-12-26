@@ -1,4 +1,4 @@
-package com.sparta.haengye_project.jwt;
+package com.sparta.haengye_project.user.jwt;
 
 import io.github.cdimascio.dotenv.Dotenv;
 import io.jsonwebtoken.Jwts;

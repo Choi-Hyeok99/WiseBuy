@@ -1,4 +1,4 @@
-package com.sparta.haengye_project.config;
+package com.sparta.haengye_project.user.config;
 
 import io.github.cdimascio.dotenv.Dotenv;
 import org.springframework.context.annotation.Bean;

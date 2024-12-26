@@ -1,6 +1,6 @@
 package com.sparta.haengye_project.user.controller;
 
-import com.sparta.haengye_project.jwt.JwtUtil;
+import com.sparta.haengye_project.user.jwt.JwtUtil;
 import com.sparta.haengye_project.user.dto.LoginRequestDto;
 import com.sparta.haengye_project.user.dto.LoginResponseDto;
 import com.sparta.haengye_project.user.dto.UserRequestDto;
