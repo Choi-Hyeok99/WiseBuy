@@ -87,6 +87,7 @@ public class OrderService {
 
        // 6. 주문 저장
         orderRepository.save(order);
+
         return new OrderResponseDto(order);
     }
 
