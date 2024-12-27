@@ -14,7 +14,7 @@ import java.util.Optional;
 @Repository
 public interface WishlistRepository extends JpaRepository<Wishlist, Long> {
 
-    Optional<Wishlist> findByUser(User user);
+    Optional<Wishlist> findByUserId(Long userId);
 
     @Query("SELECT w FROM WishListItem w JOIN FETCH w.product WHERE w.wishlist = :wishlist")
     List<WishListItem> findByWishlistWithProduct(@Param("wishlist") Wishlist wishlist);
