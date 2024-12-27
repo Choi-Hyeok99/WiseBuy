@@ -45,6 +45,29 @@ services:
       start_period: 10s
       timeout: 5s
 
+  mysql_wishlist:
+    image: mysql:8.0.36
+    container_name: mysql_wishlist
+    ports:
+      - "3330:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: wishlist_db
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_wishlist_data:/var/lib/mysql
+    networks:
+      - my_network
+    restart: always
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}" ]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 5s
+
+
 
 
   redis:
@@ -87,6 +110,7 @@ services:
 volumes:
   mysql_user_data:
   mysql_product_data:
+  mysql_wishlist_data:
   redis_data:
 
 
