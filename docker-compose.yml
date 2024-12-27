@@ -67,6 +67,28 @@ services:
       start_period: 30s
       timeout: 5s
 
+  mysql_order:
+    image: mysql:8.0.36
+    container_name: mysql_order
+    ports:
+      - "3340:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: order_db
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_order_data:/var/lib/mysql
+    networks:
+      - my_network
+    restart: always
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}" ]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 5s
+
 
 
 
@@ -111,6 +133,7 @@ volumes:
   mysql_user_data:
   mysql_product_data:
   mysql_wishlist_data:
+  mysql_order_data:
   redis_data:
 
 
