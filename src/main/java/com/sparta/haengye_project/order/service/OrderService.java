@@ -38,7 +38,7 @@ public class OrderService {
     public OrderResponseDto createOrder(OrderRequestDto requestDto, User user, String address) {
 
         // 1. 위시리스트 확인
-        Wishlist wishlist = wishlistRepository.findByUser(user)
+        Wishlist wishlist = wishlistRepository.findById(user.getId())
                 .orElseThrow(()-> new WishlistNotFoundException("위시리트가 존재하지 않습니다."));
 
         List<WishListItem> wishListItems = wishlist.getItems();
