@@ -2,3 +2,4 @@ rootProject.name = 'haengye_project'
 
 include 'user'
 include 'product'
+include 'wishlist'
