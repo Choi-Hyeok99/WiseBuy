@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  mysql_user:
+  microservices_db:
     image: mysql:8.0.36
-    container_name: mysql_user
+    container_name: microservices_db
     ports:
       - "3310:3306"
     environment:
@@ -12,7 +12,7 @@ services:
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
-      - mysql_user_data:/var/lib/mysql
+      - mysql_microservices_data:/var/lib/mysql
     networks:
       - my_network
     restart: always
@@ -21,72 +21,6 @@ services:
       interval: 10s
       retries: 5
       start_period: 10s
-      timeout: 5s
-
-  mysql_product:
-    image: mysql:8.0.36
-    container_name: mysql_product
-    ports:
-      - "3320:3306"
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: product_db
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-    volumes:
-      - mysql_product_data:/var/lib/mysql
-    networks:
-      - my_network
-    restart: always
-    healthcheck:
-      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}" ]
-      interval: 10s
-      retries: 5
-      start_period: 10s
-      timeout: 5s
-
-  mysql_wishlist:
-    image: mysql:8.0.36
-    container_name: mysql_wishlist
-    ports:
-      - "3330:3306"
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: wishlist_db
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-    volumes:
-      - mysql_wishlist_data:/var/lib/mysql
-    networks:
-      - my_network
-    restart: always
-    healthcheck:
-      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}" ]
-      interval: 10s
-      retries: 5
-      start_period: 30s
-      timeout: 5s
-
-  mysql_order:
-    image: mysql:8.0.36
-    container_name: mysql_order
-    ports:
-      - "3340:3306"
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: order_db
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-    volumes:
-      - mysql_order_data:/var/lib/mysql
-    networks:
-      - my_network
-    restart: always
-    healthcheck:
-      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}" ]
-      interval: 10s
-      retries: 5
-      start_period: 30s
       timeout: 5s
 
 
@@ -115,14 +49,14 @@ services:
     ports:
       - "8090:8090"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql_user:3306/user_db
+      SPRING_DATASOURCE_URL: jdbc:mysql://microservices_db:3306/microservices_db
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
 #      SPRING_REDIS_HOST: haengye_redis
 #      SPRING_REDIS_PORT: 6379
 #      JWT_SECRET: ${JWT_SECRET}
     depends_on:
-      - mysql_user
+      - microservices_db
 #      - redis
     command: [ "./wait-for-it.sh", "mysql:3306", "--", "java", "-jar", "/app/haengye_project.jar" ]
     restart: always
@@ -130,10 +64,7 @@ services:
       - my_network
 
 volumes:
-  mysql_user_data:
-  mysql_product_data:
-  mysql_wishlist_data:
-  mysql_order_data:
+  mysql_microservices_data:
   redis_data:
 
 
