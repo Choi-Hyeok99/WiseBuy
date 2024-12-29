@@ -129,9 +129,6 @@ services:
     networks:
       - my_network
 
-
-
-
 volumes:
   mysql_microservices_data:
   redis_data:
