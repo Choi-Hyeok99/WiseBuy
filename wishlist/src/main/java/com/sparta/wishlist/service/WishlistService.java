@@ -76,15 +76,7 @@ public class WishlistService {
                        .map(item -> {
                            // Feign Client를 통해 product-service에서 상품 정보 가져오기
                            ProductResponseDto product = productClient.getProductById(item.getProductId());
-
-                           // WishlistItemDto 생성 및 반환
-                           return new WishlistItemDto(
-                                   product.getId(),
-                                   product.getProductName(),
-                                   product.getPrice(),
-                                   product.getImagePath(),
-                                   item.getQuantity()
-                           );
+                           return WishlistItemDto.from(item,product);
                        })
                        .toList();
     }
