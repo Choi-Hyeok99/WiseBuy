@@ -23,5 +23,8 @@ public class Wishlist {
     @OneToMany(mappedBy = "wishlist", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<WishListItem> items = new ArrayList<>();
 
+    public void addItem(WishListItem item) {
+        items.add(item);
+    }
 }
 
