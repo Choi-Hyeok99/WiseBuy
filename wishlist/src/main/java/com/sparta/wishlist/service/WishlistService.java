@@ -28,41 +28,30 @@ public class WishlistService {
     private final WishListItemRepository wishListItemRepository;
     private final ProductClient productClient;
 
+    @Transactional
     public WishlistResponseDto addToWishlist(WishlistRequestDto requestDto, HttpServletRequest request) {
         // JWT 헤더에서 사용자 ID 가져오기
-        Long userId = Long.parseLong(request.getHeader("X-Claim-sub")); // id 값 들어감
+        Long userId = Long.parseLong(request.getHeader("X-Claim-sub"));
 
         // 제품 정보 가져오기
-        ProductResponseDto product;
-        try {
-            product = productClient.getProductById(requestDto.getProductId());
-        } catch (Exception e) {
-            throw new IllegalArgumentException("해당 제품을 찾을 수 없습니다. ID: " + requestDto.getProductId());
-        }
+        ProductResponseDto product = productClient.getProductById(requestDto.getProductId());
 
-        // 유저의 위시리스트 가져오기 ( 없으면 생성 )
+        // 위시리스트와 항목 조회 또는 생성
         Wishlist wishlist = wishlistRepository.findByUserId(userId)
                                               .orElseGet(() -> createNewWishlist(userId));
 
-        // 기존 위시리스트 항목 확인
-        WishListItem existingItem = wishListItemRepository.findByWishlistAndProductId(wishlist, requestDto.getProductId())
-                                                          .orElse(null);
+        WishListItem wishlistItem = wishListItemRepository.findByWishlistAndProductId(wishlist, requestDto.getProductId())
+                                                          .orElseGet(() -> {
+                                                              WishListItem newItem = new WishListItem(wishlist, requestDto.getProductId(), 0);
+                                                              wishlist.addItem(newItem); // Wishlist의 항목 리스트 관리
+                                                              return newItem;
+                                                          });
 
-        if (existingItem != null) {
-            System.out.println("Existing wishlist item found. Updating quantity.");
-            existingItem.setQuantity(existingItem.getQuantity() + requestDto.getQuantity());
-            wishListItemRepository.save(existingItem);
-            System.out.println("Updated quantity for wishlist item: " + existingItem.getQuantity());
-        } else {
-            System.out.println("No existing wishlist item found. Adding new item.");
-            WishListItem newItem = new WishListItem();
-            newItem.setWishlist(wishlist);
-            newItem.setProductId(requestDto.getProductId());
-            newItem.setQuantity(requestDto.getQuantity());
-            wishListItemRepository.save(newItem);
-        }
+        // 수량 업데이트
+        wishlistItem.addQuantity(requestDto.getQuantity());
+        wishListItemRepository.save(wishlistItem);
 
-        return WishlistResponseDto.createFrom(product, requestDto.getQuantity());
+        return WishlistResponseDto.createFrom(product, wishlistItem.getQuantity());
     }
 
     @Transactional(readOnly = true)

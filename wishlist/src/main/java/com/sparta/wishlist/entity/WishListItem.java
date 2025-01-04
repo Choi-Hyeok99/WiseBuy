@@ -2,12 +2,11 @@ package com.sparta.wishlist.entity;
 
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 
 @Entity
-@Getter
-@Setter
+@Data
+@NoArgsConstructor
 public class WishListItem {
 
     @Id
@@ -31,5 +30,13 @@ public class WishListItem {
         }
         this.quantity = quantity;
     }
+    public WishListItem(Wishlist wishlist, Long productId, int quantity) {
+        this.wishlist = wishlist;
+        this.productId = productId;
+        this.quantity = quantity;
+    }
 
+    public void addQuantity(int quantity) {
+        this.quantity += quantity;
+    }
 }
