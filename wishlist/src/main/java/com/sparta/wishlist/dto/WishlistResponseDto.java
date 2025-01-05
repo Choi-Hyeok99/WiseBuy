@@ -2,6 +2,7 @@ package com.sparta.wishlist.dto;
 
 
 import com.sparta.common.dto.ProductResponseDto;
+import com.sparta.wishlist.entity.WishListItem;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -31,6 +32,15 @@ public class WishlistResponseDto {
                 product.getProductName(),
                 quantity
         );
-    }
 
+    }
+    // 정적 팩토리 메서드 추가
+    public static WishlistResponseDto from(WishListItem wishlistItem, ProductResponseDto product) {
+        return new WishlistResponseDto(
+                wishlistItem.getId(),
+                product.getId(),
+                product.getProductName(),
+                wishlistItem.getQuantity()
+        );
+    }
 }
