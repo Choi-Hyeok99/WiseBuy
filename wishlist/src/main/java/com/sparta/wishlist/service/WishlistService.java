@@ -88,22 +88,10 @@ public class WishlistService {
         wishListItemRepository.save(wishlistItem);
 
         // Product 정보 가져오기 (FeignClient 사용)
-        ProductResponseDto product;
-        try {
-            product = productClient.getProductById(wishlistItem.getProductId());
-        } catch (Exception e) {
-            throw new IllegalArgumentException("해당 상품 정보를 가져오는 데 실패했습니다. ID: " + wishlistItem.getProductId(), e);
-        }
-
-
+        ProductResponseDto product = productClient.getProductById(wishlistItem.getProductId());
 
         // 응답 DTO 생성 및 반환
-        return new WishlistResponseDto(
-                wishlistItem.getId(),
-                product.getId(),
-                product.getProductName(),
-                wishlistItem.getQuantity()
-        );
+        return WishlistResponseDto.from(wishlistItem, product);
     }
 
     @Transactional
@@ -126,5 +114,4 @@ public class WishlistService {
         wishlist.setUserId(userId); // 유저와 연결
         return wishlistRepository.save(wishlist); // DB에 저장
     }
-
 }
