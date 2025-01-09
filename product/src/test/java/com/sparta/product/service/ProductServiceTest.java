@@ -3,7 +3,9 @@ package com.sparta.product.service;
 import com.sparta.product.dto.ProductRequestDto;
 import com.sparta.product.dto.ProductResponseDto;
 import com.sparta.product.entitiy.Product;
+import com.sparta.product.entitiy.ProductStatus;
 import com.sparta.product.entitiy.ProductType;
+import com.sparta.product.exception.NotFoundException;
 import com.sparta.product.redis.RedisUtility;
 import com.sparta.product.repository.ProductRepository;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,6 +15,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.data.domain.*;
+
+import java.util.List;
+
 import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.junit.jupiter.api.Assertions.*;
@@ -73,4 +79,46 @@ import static org.junit.jupiter.api.Assertions.*;
             assertEquals("product_stock:1", stockKeyCaptor.getValue());
             assertEquals(10, stockValueCaptor.getValue());
         }
+
+        @Test
+        void getProductList_shouldReturnProductPage() {
+            // Given
+            int page = 0;
+            int size = 5;
+
+            Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "id"));
+            Product mockProduct = new Product();
+            mockProduct.setId(1L);
+            mockProduct.setProductName("Test Product");
+            mockProduct.setStock(10);
+            mockProduct.setUserId(1L);
+            mockProduct.setProductType(ProductType.GENERAL);
+            mockProduct.setStatus(ProductStatus.AVAILABLE);
+
+            Page<Product> mockPage = new PageImpl<>(List.of(mockProduct), pageable, 1); // Mock 데이터 설정
+            when(productRepository.findAll(pageable)).thenReturn(mockPage);
+
+            // When
+            Page<ProductResponseDto> result = productService.getProductList(page, size);
+
+            // Then
+            assertNotNull(result);
+            assertEquals(1, result.getTotalElements()); // 총 요소 개수 확인
+            assertEquals("Test Product", result.getContent().get(0).getProductName()); // 제품 이름 확인
+            verify(productRepository).findAll(pageable); // Mock 호출 확인
+        }
+
+        @Test
+        void getProductList_shouldThrowNotFoundExceptionWhenEmpty() {
+            // Given
+            int page = 0;
+            int size = 5;
+            Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "id"));
+            when(productRepository.findAll(pageable)).thenReturn(Page.empty());
+
+            // When & Then
+            assertThrows(NotFoundException.class, () -> productService.getProductList(page, size));
+            verify(productRepository).findAll(pageable); // Mock 호출 확인
+        }
+
     }
