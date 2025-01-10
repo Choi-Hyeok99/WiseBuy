@@ -18,6 +18,7 @@ import org.mockito.MockitoAnnotations;
 import org.springframework.data.domain.*;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -120,5 +121,36 @@ import static org.junit.jupiter.api.Assertions.*;
             assertThrows(NotFoundException.class, () -> productService.getProductList(page, size));
             verify(productRepository).findAll(pageable); // Mock 호출 확인
         }
+
+        @Test
+        void getProductStock_shouldReturnStockWhenProductExists() {
+            // Given
+            Long productId = 1L;
+            Product mockProduct = new Product();
+            mockProduct.setId(productId);
+            mockProduct.setStock(100); // Mock 데이터: 재고 설정
+
+            when(productRepository.findById(productId)).thenReturn(Optional.of(mockProduct));
+
+            // When
+            int stock = productService.getProductStock(productId);
+
+            // Then
+            assertEquals(100, stock); // 재고 값이 100인지 검증
+            verify(productRepository).findById(productId); // Repository 호출 검증
+        }
+
+        @Test
+        void getProductStock_shouldThrowNotFoundExceptionWhenProductDoesNotExist() {
+            // Given
+            Long productId = 1L;
+
+            when(productRepository.findById(productId)).thenReturn(Optional.empty()); // 상품이 존재하지 않는 경우 설정
+
+            // When & Then
+            assertThrows(NotFoundException.class, () -> productService.getProductStock(productId));
+            verify(productRepository).findById(productId); // Repository 호출 검증
+        }
+
 
     }

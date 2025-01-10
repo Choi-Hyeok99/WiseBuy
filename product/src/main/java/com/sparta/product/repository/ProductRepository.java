@@ -17,13 +17,6 @@ import java.util.Optional;
 
 @Repository
 public interface ProductRepository extends JpaRepository<Product,Long> {
-
-
-//    @Query("SELECT new com.sparta.haengye_project.product.dto.ProductResponseDto(p.id, p.productName, p.stock, pi.price, pi.imagePath, p.startTime, p.endTime) " +
-//            "FROM Product p " +
-//            "JOIN ProductInfo pi ON p.id = pi.product.id")
-//    List<ProductResponseDto> findAllWithProductInfo();
-
     // 재고가 있는 상품 목록 조회
     @Query("SELECT p FROM Product p WHERE p.stock > 0")
     Page<Product> findAvailableProducts(Pageable pageable);
@@ -36,11 +29,5 @@ public interface ProductRepository extends JpaRepository<Product,Long> {
     // **재고(stock)만 조회하는 최적화된 쿼리**
     @Query("SELECT p.stock FROM Product p WHERE p.id = :productId")
     Optional<Integer> findStockById(@Param("productId") Long productId);
-
-
-
-
-
-
 
 }
