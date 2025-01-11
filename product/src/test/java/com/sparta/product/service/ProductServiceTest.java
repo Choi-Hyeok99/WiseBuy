@@ -19,6 +19,7 @@ import org.springframework.data.domain.*;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -151,6 +152,105 @@ import static org.junit.jupiter.api.Assertions.*;
             assertThrows(NotFoundException.class, () -> productService.getProductStock(productId));
             verify(productRepository).findById(productId); // Repository 호출 검증
         }
+
+        @Test
+        void updateStockWithDistributedLock_shouldUpdateStockSuccessfully() {
+            // Given
+            Long productId = 1L;
+            int quantity = 10;
+
+            // Mock Product
+            Product mockProduct = new Product();
+            mockProduct.setId(productId);
+            mockProduct.setStock(50); // 기존 재고
+
+            // Redis 락 Mock 설정
+            when(redisUtility.acquireLock("product_stock_lock:" + productId, 1000, TimeUnit.MILLISECONDS)).thenReturn(true);
+
+            // ProductRepository Mock 설정
+            when(productRepository.findById(productId)).thenReturn(Optional.of(mockProduct));
+            when(productRepository.save(any(Product.class))).thenReturn(mockProduct);
+
+            // When
+            productService.updateStockWithDistributedLock(productId, quantity);
+
+            // Then
+            verify(redisUtility).acquireLock("product_stock_lock:" + productId, 1000, TimeUnit.MILLISECONDS); // 락 획득 확인
+            verify(redisUtility).releaseLock("product_stock_lock:" + productId); // 락 해제 확인
+            verify(productRepository).findById(productId); // 상품 조회 확인
+            verify(productRepository).save(mockProduct); // 재고 저장 확인
+            verify(redisUtility).saveToCache("product_stock:" + productId, 60); // Redis 캐시 갱신 확인
+            assertEquals(60, mockProduct.getStock()); // 재고가 60으로 업데이트되었는지 확인
+        }
+
+        @Test
+        void updateStockWithDistributedLock_shouldThrowExceptionWhenLockFails() {
+            // Given
+            Long productId = 1L;
+            int quantity = 10;
+
+            // Redis 락 Mock 설정: 락 획득 실패
+            when(redisUtility.acquireLock("product_stock_lock:" + productId, 1000, TimeUnit.MILLISECONDS)).thenReturn(false);
+
+            // When & Then
+            assertThrows(IllegalStateException.class, () -> productService.updateStockWithDistributedLock(productId, quantity));
+
+            // Verify
+            verify(redisUtility).acquireLock("product_stock_lock:" + productId, 1000, TimeUnit.MILLISECONDS); // 락 획득 시도 확인
+            verifyNoMoreInteractions(redisUtility); // 락 해제 등 다른 Redis 호출 없음
+            verifyNoInteractions(productRepository); // Repository 호출 없음
+        }
+
+        @Test
+        void updateStockWithDistributedLock_shouldThrowExceptionWhenProductNotFound() {
+            // Given
+            Long productId = 1L;
+            int quantity = 10;
+
+            // Redis 락 Mock 설정
+            when(redisUtility.acquireLock("product_stock_lock:" + productId, 1000, TimeUnit.MILLISECONDS)).thenReturn(true);
+
+            // ProductRepository Mock 설정: 상품이 없을 경우
+            when(productRepository.findById(productId)).thenReturn(Optional.empty());
+
+            // When & Then
+            assertThrows(NotFoundException.class, () -> productService.updateStockWithDistributedLock(productId, quantity));
+
+            // Verify
+            verify(redisUtility).acquireLock("product_stock_lock:" + productId, 1000, TimeUnit.MILLISECONDS); // 락 획득 확인
+            verify(redisUtility).releaseLock("product_stock_lock:" + productId); // 락 해제 확인
+            verify(productRepository).findById(productId); // 상품 조회 확인
+            verifyNoMoreInteractions(productRepository); // 저장 호출 없음
+        }
+
+        @Test
+        void updateStockWithDistributedLock_shouldThrowExceptionWhenStockInsufficient() {
+            // Given
+            Long productId = 1L;
+            int quantity = -60; // 재고 부족 상황
+
+            // Mock Product
+            Product mockProduct = new Product();
+            mockProduct.setId(productId);
+            mockProduct.setStock(50); // 기존 재고
+
+            // Redis 락 Mock 설정
+            when(redisUtility.acquireLock("product_stock_lock:" + productId, 1000, TimeUnit.MILLISECONDS)).thenReturn(true);
+
+            // ProductRepository Mock 설정
+            when(productRepository.findById(productId)).thenReturn(Optional.of(mockProduct));
+
+            // When & Then
+            assertThrows(IllegalArgumentException.class, () -> productService.updateStockWithDistributedLock(productId, quantity));
+
+            // Verify
+            verify(redisUtility).acquireLock("product_stock_lock:" + productId, 1000, TimeUnit.MILLISECONDS); // 락 획득 확인
+            verify(redisUtility).releaseLock("product_stock_lock:" + productId); // 락 해제 확인
+            verify(productRepository).findById(productId); // 상품 조회 확인
+            verifyNoMoreInteractions(productRepository); // 저장 호출 없음
+        }
+
+
 
 
     }
