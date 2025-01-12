@@ -15,17 +15,9 @@ services:
       - mysql_microservices_data:/var/lib/mysql
     networks:
       - my_network
-    restart: always
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
-      interval: 10s
-      retries: 5
-      start_period: 10s
-      timeout: 5s
 
 
-
-
+# Redis 서버
   redis:
     image: redis:latest
     container_name: haengye_redis
@@ -41,27 +33,104 @@ services:
     networks:
       - my_network
 
-  haengye_project:
+# Eureka 서버
+  eureka-server:
     build:
-      context: ./
+      context: ./eureka-server
       dockerfile: Dockerfile
-    container_name: haengye_project
+    container_name: eureka-server
     ports:
-      - "8090:8090"
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://microservices_db:3306/microservices_db
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
-#      SPRING_REDIS_HOST: haengye_redis
-#      SPRING_REDIS_PORT: 6379
-#      JWT_SECRET: ${JWT_SECRET}
-    depends_on:
-      - microservices_db
-#      - redis
-    command: [ "./wait-for-it.sh", "mysql:3306", "--", "java", "-jar", "/app/haengye_project.jar" ]
-    restart: always
+      - "8761:8761"
     networks:
       - my_network
+
+
+    # User 서버
+  user:
+    build:
+      context: ./user
+      dockerfile: Dockerfile
+    container_name: user-service
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL_USER: ${SPRING_DATASOURCE_URL_USER}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_DATASOURCE_PASSWORD}
+    depends_on:
+      - eureka-server
+    networks:
+      - my_network
+
+    # product 서버
+  product:
+    build:
+      context: ./product
+      dockerfile: Dockerfile
+    container_name: product-service
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL_PRODUCT}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_DATASOURCE_PASSWORD}
+    depends_on:
+      - eureka-server
+    networks:
+      - my_network
+
+  # wishlist 서버
+  wishlist:
+    build:
+      context: ./wishlist
+      dockerfile: Dockerfile
+    container_name: wishlist-service
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL_WISHLIST}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_DATASOURCE_PASSWORD}
+    depends_on:
+      - eureka-server
+    networks:
+      - my_network
+
+
+  # order 서버
+  order:
+    build:
+      context: ./order
+      dockerfile: Dockerfile
+    container_name: order-service
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL_ORDER}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_DATASOURCE_PASSWORD}
+    depends_on:
+      - eureka-server
+    networks:
+      - my_network
+
+  # gateway-service 서버
+  gateway-service:
+    build:
+      context: ./gateway-service
+      dockerfile: Dockerfile
+    container_name: gateway-service
+    ports:
+      - "8000:8000"
+    environment:
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka # Eureka 서버 URL
+    depends_on:
+      - eureka-server
+    networks:
+      - my_network
+
+
+
 
 volumes:
   mysql_microservices_data:
@@ -70,4 +139,34 @@ volumes:
 
 networks:
   my_network:
+    name: haengye_project
+    driver: bridge
+
+
+#  haengye_project:
+#    build:
+#      context: ./
+#      dockerfile: Dockerfile
+#    container_name: haengye_project
+#    ports:
+#      - "8090:8090"
+#    environment:
+#      SPRING_DATASOURCE_URL: jdbc:mysql://microservices_db:3306/microservices_db
+#      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+#      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+##      SPRING_REDIS_HOST: haengye_redis
+##      SPRING_REDIS_PORT: 6379
+##      JWT_SECRET: ${JWT_SECRET}
+#    depends_on:
+#      - microservices_db
+##      - redis
+#    command: [ "./wait-for-it.sh", "mysql:3306", "--", "java", "-jar", "/app/haengye_project.jar" ]
+#    restart: always
+#    networks:
+#      - my_network
+#
+
+
+
+
 
