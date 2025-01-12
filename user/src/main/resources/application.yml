@@ -1,0 +1,71 @@
+spring:
+  application:
+    name: user-service # 서비스 이름 설정
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  sql:
+    init:
+      mode: always
+
+  mail:
+    host: smtp.naver.com
+    port: 465
+    username: ${NAVER_MAIL_ID}
+    password: ${NAVER_MAIL_PASSWORD}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.ssl.enable: true
+      mail.smtp.ssl.trust: smtp.naver.com
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
+
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      timeout: 10000
+      lettuce:
+        pool:
+          max-active: 10
+          max-idle: 5
+          min-idle: 1
+          max-wait: 10000
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds : 600 # 5초마다 갱신
+    disable-delta: true
+    service-url:
+       defaultZone: http://127.0.0.1:8761/eureka
+     #  defaultZone: http://eureka-server:8761/eureka ( 도커 환경 )
+
+    instance:
+      hostname: eureka-server
+      lease-renewal-interval-in-seconds: 10
+      lease-expiration-duration-in-seconds: 30
+      prefer-ip-address: true
+      instance-id: user-service:${random.value}
+      non-secure-port-enabled: true
+      metadata-map:
+        instanceId: user-service:${random.value}
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 3600000
+
+server:
+  port: 8081
