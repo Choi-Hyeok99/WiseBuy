@@ -1,0 +1,73 @@
+spring:
+  application:
+    name: product-service # 서비스 이름 설정
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 10
+      idle-timeout: 30000
+      connection-timeout: 30000
+      max-lifetime: 1800000
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  sql:
+    init:
+      mode: always
+
+
+
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      timeout: 10000
+      lettuce:
+        pool:
+          max-active: 50
+          max-idle: 20
+          min-idle: 5
+          max-wait: 5000
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds : 600 # 5초마다 갱신
+    disable-delta: true
+    service-url:
+      defaultZone: http://127.0.0.1:8761/eureka
+
+    instance:
+      lease-renewal-interval-in-seconds: 10
+      lease-expiration-duration-in-seconds: 30
+      prefer-ip-address: true
+      instance-id: product-service:${random.value}
+      non-secure-port-enabled: true
+      metadata-map:
+        instanceId: product-service:${random.value}
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 3600000
+
+server:
+  port: 8082
+
+  task:
+    execution:
+      pool:
+        core-size: 20
+        max-size: 50
+        queue-capacity: 100
+      shutdown:
+        await-termination: true
+        await-termination-period: 30s

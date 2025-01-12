@@ -1,0 +1,8 @@
+spring:
+  application:
+    name: common
+
+
+jwt:
+  secret: dc5e94f5a9bdfa05694b14baa9a37117cfcd5a6474c5af3a5b07fe6baee8398d
+  expiration: 3600000

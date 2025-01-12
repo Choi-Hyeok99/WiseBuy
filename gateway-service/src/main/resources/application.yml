@@ -1,0 +1,99 @@
+spring:
+  application:
+    name: gateway-service
+  cloud:
+    gateway:
+      routes:
+        - id: user-service
+          uri: lb://user-service
+          predicates:
+            - Path=/user-service/**
+          filters:
+            - StripPrefix=1
+            - name: JwtFilter # JwtFilter ??
+
+
+        - id: product-service
+          uri: lb://product-service
+          predicates:
+            - Path=/product-service/**
+          filters:
+            - StripPrefix=1
+            - name: JwtFilter # JwtFilter ??
+
+        - id: order-service
+          uri: lb://order-service
+          predicates:
+            - Path=/order-service/**
+          filters:
+            - StripPrefix=1
+            - name: JwtFilter # JwtFilter ??
+
+
+        - id: wishlist-service
+          uri: lb://wishlist-service
+          predicates:
+            - Path=/wishlist-service/**
+          filters:
+            - StripPrefix=1
+            - name: JwtFilter # JwtFilter ??
+
+        - id: payment-service
+          uri: lb://payment-service
+          predicates:
+            - Path=/payments/**
+          filters:
+            - StripPrefix=1
+            - name: JwtFilter # JwtFilter ??
+
+      default-filters:
+        - name: GlobalFilter
+          args:
+            baseMessage: "Spring Cloud Gateway Global Filter"
+            preLogger: true
+            postLogger: true
+
+server:
+  port: 8000
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 600 # 5??? ??
+    disable-delta: true
+    service-url:
+          defaultZone: http://127.0.0.1:8761/eureka
+  #      defaultZone: http://eureka-server:8761/eureka ( 도커 환경 )
+
+  instance:
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+    prefer-ip-address: true
+    instance-id: gateway-service:${random.value}
+    non-secure-port-enabled: true
+    metadata-map:
+      instanceId: gateway-service:${random.value}
+
+
+
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info  # health ????? ???
+  health:
+    default-indicator-status: UP  # ?? ??? UP?? ??
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+jwt:
+  secret: dc5e94f5a9bdfa05694b14baa9a37117cfcd5a6474c5af3a5b07fe6baee8398d
+  expiration: 3600000
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG

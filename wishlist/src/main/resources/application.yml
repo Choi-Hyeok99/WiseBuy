@@ -1,0 +1,67 @@
+spring:
+  application:
+    name: wishlist-service
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  sql:
+    init:
+      mode: always
+
+
+
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      timeout: 10000
+      lettuce:
+        pool:
+          max-active: 10
+          max-idle: 5
+          min-idle: 1
+          max-wait:
+            10000   host:
+
+  feign:
+    client:
+      config:
+        default:
+          connectTimeout: 5000
+          readTimeout: 5000
+
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 600 # 5??? ??
+    disable-delta: true
+    service-url:
+      defaultZone: http://127.0.0.1:8761/eureka
+#      defaultZone: http://eureka-server:8761/eureka ( 도커 환경 )
+
+  instance:
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+    prefer-ip-address: true
+    instance-id: wishlist-service:${random.value}
+    non-secure-port-enabled: true
+    metadata-map:
+      instanceId: wishlist-service:${random.value}
+
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration: 3600000
+
+server:
+  port: 8083

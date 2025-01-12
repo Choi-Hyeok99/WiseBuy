@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: payment-service
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  sql:
+    init:
+      mode: always
+
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 600
+    disable-delta: true
+    service-url:
+      defaultZone: http://127.0.0.1:8761/eureka
+    instance:
+      hostname: eureka-server
+      lease-renewal-interval-in-seconds: 10
+      lease-expiration-duration-in-seconds: 30
+      prefer-ip-address: true
+      instance-id: payment-service:${random.value}
+      non-secure-port-enabled: true
+      metadata-map:
+        instanceId: payment-service:${random.value}
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 3600000
+
+server:
+  port: 8085
