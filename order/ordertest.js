@@ -3,7 +3,7 @@ import { check, sleep } from 'k6';
 
 // 10개의 서로 다른 userId를 미리 정의합니다.
 const userIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-const productId = 1;  // 예시로 사용될 상품 ID
+const productId = 9;  // 예시로 사용될 상품 ID
 const address = "서울시 강남구";  // 예시 주소
 
 // JWT 토큰
@@ -22,7 +22,7 @@ export let options = {
     scenarios: {
         unique_users: {
             executor: 'per-vu-iterations',
-            vus: 10,
+            vus: 1500,
             iterations: 1,
             maxDuration: '1m',
         },
