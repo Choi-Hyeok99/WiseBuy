@@ -28,11 +28,7 @@ public class RedisUtility {
     }
 
 
-    // RedisUtility 클래스에서 ( 변경 전 )
-//    public boolean acquireLock(String lockKey, long timeout, TimeUnit timeUnit) {
-//        Boolean success = redisTemplate.opsForValue().setIfAbsent(lockKey, "locked", timeout, timeUnit);
-//        return success != null && success;
-//    }
+
 
     // ( 변경 후 )
     public boolean acquireLock(String lockKey, long timeout, TimeUnit timeUnit) {
@@ -65,10 +61,16 @@ public class RedisUtility {
         redisTemplate.opsForValue().set(key, value, ttlInSeconds, TimeUnit.SECONDS);
     }
 
-    // 값 조회
-    public Object getFromCache(String key) {
-        return redisTemplate.opsForValue().get(key);
+
+    // 제네릭을 활용한 값 조회 메서드
+    public <T> T getFromCache(String key, Class<T> type) {
+        Object value = redisTemplate.opsForValue().get(key);
+        if (value != null && type.isInstance(value)) {
+            return type.cast(value); // 지정된 타입으로 안전하게 반환
+        }
+        return null; // 캐시에 값이 없거나 타입이 일치하지 않으면 null 반환
     }
+
 
     // 값 삭제
     public void deleteFromCache(String key) {
