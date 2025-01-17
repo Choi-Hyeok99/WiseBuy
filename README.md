@@ -29,20 +29,22 @@
 <h2 id="기술-스택">⚙️ 기술 스택</h2>
 
 | 분야          | 기술                | 아이콘 | 버전       |
-| ------------- | ------------------ |-----|----------|
-| **Backend**   | Java              | ☕   | 17       |
-|               | Spring Boot       | 🌱  | 3.x      |
-|               | Spring Data JPA   | 📦  | 최신       |
-|               | Spring Security   | 🛡  | 최신       |
-| **Database**  | MySQL             | 🐬  | 8.0.36   |
-|               | Redis             | 🔥  | 7.4.1    |
-| **Server**    | Docker            | 🐳  | 20.10.x  |
-|               | Spring Cloud      | 📦  | 2024.0.0 |
-| **Version Control** | Git               | 🛠  | 최신       |
-|               | GitHub            | 🔗  | 최신       |
-| **IDE**       | IntelliJ IDEA     | 💻  | Ultimate |
+| ----------- | ------------------ |-----|----------|
+| **Backend** | Java              | ☕   | 17       |
+|             | Spring Boot       | 🌱  | 3.x      |
+|             | Spring Data JPA   | 📦  | -        |
+|             | Spring Security   | 🛡  | -        |
+| **Database** | MySQL             | 🐬  | 8.0.36   |
+|             | Redis             | 🔥  | 7.4.1    |
+| **Server**  | Docker            | 🐳  | 20.10.x  |
+|             | Spring Cloud      | 📦  | 2024.0.0 |
+| **Version Control** | Git               | 🛠  | -        |
+|             | GitHub            | 🔗  | -        |
+| **IDE**     | IntelliJ IDEA     | 💻  | Ultimate |
 | **Test Tools**| K6                | 🧪  | 0.55.2   |
-|               | Postman           | 📮  | 최신       |
+|             | Postman           | 📮  | -        |
+| | JUnit 5           | 🧪  | -        |
+| **Authentication** | JWT              | 🔑   | -        |
 
 ---
 
