@@ -29,7 +29,7 @@ public class PaymentService {
 
         // 결제 처리 로직 (80% 성공, 20% 실패)
 //        boolean isPaymentSuccessful = Math.random() > 0.2; ( 실제 테스트 )
-        boolean isPaymentSuccessful = Math.random() > 0.01; // 성공 테스트 확인 여부
+        boolean isPaymentSuccessful = Math.random() > 0.2; // 성공 테스트 확인 여부
         PaymentStatus status = isPaymentSuccessful ? PaymentStatus.SUCCESS : PaymentStatus.FAILED;
 
         // Payment 엔티티 생성 및 저장
