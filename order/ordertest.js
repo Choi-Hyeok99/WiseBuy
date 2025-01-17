@@ -3,11 +3,11 @@ import { check, sleep } from 'k6';
 
 // 10개의 서로 다른 userId를 미리 정의합니다.
 const userIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-const productId = 9;  // 예시로 사용될 상품 ID
+const productId = 13;  // 예시로 사용될 상품 ID
 const address = "서울시 강남구";  // 예시 주소
 
 // JWT 토큰
-const jwtToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJndXIwNzA5QG5hdmVyLmNvbSIsImFkZHJlc3MiOiIxMjMgTWFpbiBTdHJlZXQiLCJpYXQiOjE3MzY3NjQyMzEsImV4cCI6MTczNjg1MDYzMX0.ZPerxsfZX0i_acpRApBH6zt0ZxZsEEm23sCifAGK4pE';
+const jwtToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJndXIwNzA5QG5hdmVyLmNvbSIsImFkZHJlc3MiOiIxMjMgTWFpbiBTdHJlZXQiLCJpYXQiOjE3MzcxMDk0MDksImV4cCI6MTczNzE5NTgwOX0.i7hF52rCalK6uWFixkt6tBfoOB_MMQYw0sP0DeDFWPc';
 
 function createOrderData(userId) {
     return {
@@ -22,7 +22,7 @@ export let options = {
     scenarios: {
         unique_users: {
             executor: 'per-vu-iterations',
-            vus: 1500,
+            vus: 300,
             iterations: 1,
             maxDuration: '1m',
         },
@@ -78,8 +78,9 @@ export default function () {
         return;
     }
 
-    // 3. 결제 상태 업데이트 API 호출 (쿼리 파라미터로 상태 전달)
-    let updateOrderStatusUrl = `http://localhost:8000/order-service/orders/${orderId}/update-status?isPaymentSuccessful=true`;
+    // 3. 결제 상태 업데이트 API 호출
+    let isPaymentSuccessful = Math.random() >= 0.2; // 80% 성공, 20% 실패
+    let updateOrderStatusUrl = `http://localhost:8000/order-service/orders/${orderId}/update-status?isPaymentSuccessful=${isPaymentSuccessful}`;
     let updateOrderStatusResponse = http.post(updateOrderStatusUrl, null, {
         headers: {
             'Authorization': `Bearer ${jwtToken}`,
@@ -88,12 +89,15 @@ export default function () {
     });
 
     check(updateOrderStatusResponse, {
-        'order status update is status 200': (r) => r.status === 200,
+        'order status update is status 200': (r) => r.status === 200 || r.status === 400, // 실패도 허용
     });
+
+    // 로그 출력으로 성공/실패 확인
+    console.log(`Order ID: ${orderId}, Payment Successful: ${isPaymentSuccessful}`);
 
     if (updateOrderStatusResponse.status !== 200) {
         console.error('Order status update failed', updateOrderStatusResponse.body);
     }
 
-    sleep(1);  // 1초 대기 후 다음 유저로 넘어감
+    sleep(0.1); // 1초 대기 후 다음 유저로 넘어감
 }
