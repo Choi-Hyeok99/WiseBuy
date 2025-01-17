@@ -16,7 +16,7 @@
 4. [✏️ 기술적 고민 및 해결](#기술적-고민-및-해결)
 5. [🐳 Docker 기반 실행 방법](#docker-기반-실행-방법)
 6. [📄 프로젝트 문서 및 설계 자료](#프로젝트-문서-및-설계-자료)
-
+7. [📖 프로젝트 Wiki](https://github.com/Choi-Hyeok99/haengye_project/wiki)
 
 
 
