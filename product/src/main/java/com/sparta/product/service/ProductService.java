@@ -96,9 +96,25 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public int getProductStock(Long productId) {
-        Product product = productRepository.findById(productId)
-                                           .orElseThrow(() -> new NotFoundException("해당 상품이 존재하지 않습니다. 상품 ID: " + productId));
-        return product.getStock();
+        String stockKey = STOCK_KEY_PREFIX + productId;
+
+        // Redis에서 캐싱된 데이터 확인
+        Integer cachedStock = redisUtility.getFromCache(stockKey, Integer.class);
+        if (cachedStock != null) {
+            log.info("Cache hit for product stock: " + productId);
+            return cachedStock; // 캐시 데이터 반환
+        }
+
+        log.info("Cache miss for product stock: " + productId);
+
+        // Redis 캐시에 데이터가 없으면 DB에서 조회
+        int stock = productRepository.findStockById(productId)
+                                     .orElseThrow(() -> new NotFoundException("해당 상품이 존재하지 않습니다. 상품 ID: " + productId));
+
+        // Redis 캐시에 저장 (TTL 설정 가능)
+        redisUtility.saveToCache(stockKey, stock, 3600); // 1시간 TTL
+
+        return stock;
     }
 
     @Transactional
