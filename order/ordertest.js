@@ -3,11 +3,11 @@ import { check, sleep } from 'k6';
 
 // 10개의 서로 다른 userId를 미리 정의합니다.
 const userIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-const productId = 13;  // 예시로 사용될 상품 ID
+const productId = 15;  // 예시로 사용될 상품 ID
 const address = "서울시 강남구";  // 예시 주소
 
 // JWT 토큰
-const jwtToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJndXIwNzA5QG5hdmVyLmNvbSIsImFkZHJlc3MiOiIxMjMgTWFpbiBTdHJlZXQiLCJpYXQiOjE3MzcxMDk0MDksImV4cCI6MTczNzE5NTgwOX0.i7hF52rCalK6uWFixkt6tBfoOB_MMQYw0sP0DeDFWPc';
+const jwtToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJndXIwNzA5QG5hdmVyLmNvbSIsImFkZHJlc3MiOiIxMjMgTWFpbiBTdHJlZXQiLCJpYXQiOjE3MzczNTg3MjQsImV4cCI6MTczNzQ0NTEyNH0.5eylwkK5nTwnZtwOS_do_awI306467yOFUHF9xag4rA';
 
 function createOrderData(userId) {
     return {
@@ -22,7 +22,7 @@ export let options = {
     scenarios: {
         unique_users: {
             executor: 'per-vu-iterations',
-            vus: 300,
+            vus: 100,
             iterations: 1,
             maxDuration: '1m',
         },
