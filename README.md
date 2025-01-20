@@ -19,6 +19,11 @@
 7. [📖 프로젝트 Wiki](https://github.com/Choi-Hyeok99/haengye_project/wiki)
 
 
+<details>
+<summary>아키텍쳐</summary>
+
+![img.png](image%2Fimg.png)
+</details>
 
 <h2 id="프로젝트-기간">📅 프로젝트 기간</h2>
 
@@ -200,12 +205,6 @@ networks:
 <summary>API 명세서</summary>
 
 [API 명세서](https://documenter.getpostman.com/view/25757385/2sAYQZHsEV)
-</details>
-
-<details>
-<summary>아키텍쳐</summary>
-
-![img.png](image%2Fimg.png)
 </details>
 
 <details>
