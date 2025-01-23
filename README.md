@@ -19,8 +19,8 @@
 7. [📖 프로젝트 Wiki](https://github.com/Choi-Hyeok99/haengye_project/wiki)
 
 
-## 📖 시스템 아키텍쳐 
-![시스템 아키텍쳐.png](image%2F%EC%8B%9C%EC%8A%A4%ED%85%9C%20%EC%95%84%ED%82%A4%ED%85%8D%EC%B3%90.png)
+## 📖 시스템 아키텍쳐
+![아키텍쳐.png](image%2F%EC%95%84%ED%82%A4%ED%85%8D%EC%B3%90.png)
 
 ## 📖 Sequence Diagram
 ![Sequence.png](image%2FSequence.png)
