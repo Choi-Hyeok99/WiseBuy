@@ -27,8 +27,6 @@ public class UserController {
     private final AuthenticationManager authenticationManager; // AuthenticationManager
     private final JwtUtil jwtUtil;  // JwtUtil
 
-
-    // 이메일 인증 토큰 발송
     @PostMapping("/send-email")
     public ResponseEntity<?> sendEmail(@RequestParam String email) throws MessagingException {
         userService.sendEmailVerificationToken(email);
@@ -41,36 +39,30 @@ public class UserController {
             UserResponseDto responseDto = userService.signup(requestDto, requestDto.getVerificationToken());
             return ResponseEntity.ok(responseDto);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(null); // 인증 코드 오류나 중복 이메일 발생 시 처리
+            return ResponseEntity.badRequest().body(null);
         } catch (MessagingException e) {
             return ResponseEntity.status(500)
-                                 .body(null);  // 이메일 인증 처리 중 오류 발생 시
+                                 .body(null);
         }
     }
-
-    // 로그인 처리
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequestDto loginRequestDto) {
         log.info("Login Request: email={}, password={}", loginRequestDto.getEmail(), loginRequestDto.getPassword());
         try {
-            // 사용자 인증
             UsernamePasswordAuthenticationToken authenticationToken =
                     new UsernamePasswordAuthenticationToken(loginRequestDto.getEmail(), loginRequestDto.getPassword());
 
             Authentication authentication = authenticationManager.authenticate(authenticationToken);
 
 
-            // 인증 성공 후 SecurityContext에 인증 정보를 저장
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            // JWT 토큰 생성
             User user = userService.findUserByEmail(loginRequestDto.getEmail());
             String token = jwtUtil.generateToken(loginRequestDto.getEmail(),user.getId(),user.getAddress());
 
-            // JWT 토큰을 응답으로 반환
             return ResponseEntity.ok(new LoginResponseDto(token));
         } catch (Exception e) {
-            return ResponseEntity.status(401).body("로그인 실패");  // 인증 실패 시
+            return ResponseEntity.status(401).body("로그인 실패");
         }
     }
 }
