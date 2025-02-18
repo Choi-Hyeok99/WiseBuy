@@ -47,6 +47,9 @@ dependencies {
 	// Redis 관련
 	implementation 'org.springframework.data:spring-data-redis'
 
+	// Kafka
+	implementation 'org.springframework.kafka:spring-kafka'
+
 	// Lombok
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
