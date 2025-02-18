@@ -29,6 +29,7 @@ public class ProductConsumerService {
             Long productId = stockUpdateDto.getProductId();
             int quantity = stockUpdateDto.getQuantity();
 
+
             log.info("📦 주문된 상품 ID: {}, 감소할 수량: {}", productId, quantity);
         } catch (Exception e) {
             log.error("❌ Kafka 메시지 처리 중 오류 발생: ", e);
