@@ -37,6 +37,18 @@ spring:
           min-idle: 5
           max-wait: 5000
 
+  kafka:
+    consumer:
+      group-id: product-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+        spring.json.value.default.type: com.sparta.common.dto.KafkaMessage
+        spring.json.value.default.type.mapping:
+          com.sparta.common.dto.KafkaMessage: com.sparta.product.dto.StockUpdateRequestDto
+        spring.json.add.type.headers: true
+
 eureka:
   client:
     register-with-eureka: true
