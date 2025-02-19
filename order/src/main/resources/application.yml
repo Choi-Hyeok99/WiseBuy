@@ -46,6 +46,12 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer  # 값은 JSON 직렬화
       properties:
         spring.json.add.type.headers: true  # 메시지에 타입 헤더 포함
+    consumer:
+      group-id: order-service  # Order 서비스용 Kafka 컨슈머 그룹 ID
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"  # 모든 패키지에서 DTO 역직렬화 허용
 
 eureka:
   client:
