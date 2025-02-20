@@ -1,8 +1,8 @@
 package com.sparta.order.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sparta.common.dto.KafkaMessage;
 import com.sparta.order.entity.Order;
+import com.sparta.order.entity.OrderItem;
 import com.sparta.order.entity.OrderStatus;
 import com.sparta.order.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +19,7 @@ import java.util.Map;
 public class OrderConsumerService {
 
     private final OrderRepository orderRepository;
-    private final ObjectMapper objectMapper;
+    private final OrderProducerService orderProducerService;
 
     @KafkaListener(topics = "payment.result", groupId = "order-service")
     @Transactional
@@ -38,8 +38,17 @@ public class OrderConsumerService {
                 order.setStatus(OrderStatus.PAYMENT_COMPLETED);
             } else {
                 order.setStatus(OrderStatus.PAYMENT_FAILED);
-            }
 
+                // 결제 실패시, stock.rollback 이벤트 발행 ( 재고 복구 )
+                for (OrderItem item : order.getOrderItems()) {
+                    KafkaMessage<Map<String, Object>> rollbackMessage = new KafkaMessage<>("STOCK_ROLLBACK", Map.of(
+                            "productId", item.getProductId(),
+                            "quantity", item.getQuantity()
+                    ));
+                    orderProducerService.sendMessage("stock.rollback", rollbackMessage);
+                }
+                log.info("결제 실패 -> 주문 취소, 재고 롤백 이벤트 발행 : 주문 ID {}", orderId);
+            }
             orderRepository.save(order);
             log.info("주문 ID {} 상태 업데이트 : ", orderId, order.getStatus());
         } catch (Exception e){
