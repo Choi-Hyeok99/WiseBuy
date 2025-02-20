@@ -3,7 +3,6 @@ package com.sparta.order.controller;
 import com.sparta.common.dto.OrderResponseForPaymentDto;
 import com.sparta.order.dto.OrderRequestDto;
 import com.sparta.order.dto.OrderResponseDto;
-import com.sparta.order.dto.UpdateOrderStatusRequest;
 import com.sparta.order.service.OrderService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;

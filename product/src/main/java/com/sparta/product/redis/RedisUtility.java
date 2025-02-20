@@ -1,11 +1,7 @@
 package com.sparta.product.redis;
 
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
-
-import java.time.Duration;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @Component

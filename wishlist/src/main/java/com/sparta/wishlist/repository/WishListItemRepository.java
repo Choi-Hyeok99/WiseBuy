@@ -13,6 +13,4 @@ import java.util.Optional;
 public interface WishListItemRepository extends JpaRepository<WishListItem, Long> {
     Optional<WishListItem> findByWishlistAndProductId(Wishlist wishlist, Long productId);
     Optional<WishListItem> findByIdAndWishlist(Long id, Wishlist wishlist);
-
-
 }

@@ -1,8 +1,6 @@
 package com.sparta.payment.service;
 
 import com.sparta.common.dto.KafkaMessage;
-import com.sparta.common.dto.OrderResponseForPaymentDto;
-import com.sparta.payment.client.OrderClient;
 import com.sparta.payment.dto.PaymentRequestDto;
 import com.sparta.payment.dto.PaymentResponseDto;
 import com.sparta.payment.entity.Payment;

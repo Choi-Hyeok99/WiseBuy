@@ -6,11 +6,10 @@ import com.sparta.product.dto.ProductResponseDto;
 import com.sparta.product.entitiy.Product;
 import com.sparta.product.entitiy.ProductStatus;
 import com.sparta.product.entitiy.ProductType;
-import com.sparta.product.exception.ForbiddenException;
 import com.sparta.product.exception.NotFoundException;
 import com.sparta.product.exception.UnauthorizedException;
-import com.sparta.product.repository.ProductRepository;
 import com.sparta.product.redis.RedisUtility;
+import com.sparta.product.repository.ProductRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,12 +17,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 @Service

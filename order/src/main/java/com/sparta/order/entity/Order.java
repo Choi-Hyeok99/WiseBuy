@@ -1,8 +1,6 @@
 package com.sparta.order.entity;
 
 
-import com.sparta.common.dto.ProductResponseDto;
-import com.sparta.common.dto.WishlistItemDto;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
