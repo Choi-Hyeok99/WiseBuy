@@ -46,10 +46,10 @@ public class RedisUtility {
         Long result = redisTemplate.execute(lockScript, Collections.singletonList(key), requestId, String.valueOf(expireTimeMillis));
 
         if (result != null && result == 1) {
-            log.info("✅ Redis Lock 획득 성공 - Key: {}, RequestID: {}, ExpireTime: {}ms", key, requestId, expireTimeMillis);
+            log.info(" Redis Lock 획득 성공 - Key: {}, RequestID: {}, ExpireTime: {}ms", key, requestId, expireTimeMillis);
             return true;
         } else {
-            log.warn("❌ Redis Lock 획득 실패 - Key: {}, RequestID: {}", key, requestId);
+            log.warn(" Redis Lock 획득 실패 - Key: {}, RequestID: {}", key, requestId);
             return false;
         }
     }
@@ -131,7 +131,7 @@ public class RedisUtility {
             }
         }
 
-        log.error("❌ 락 획득 실패 - Key: {}, 최대 재시도 횟수 초과", lockKey);
+        log.error(" 락 획득 실패 - Key: {}, 최대 재시도 횟수 초과", lockKey);
         return false;
     }
 }

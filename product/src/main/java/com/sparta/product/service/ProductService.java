@@ -23,7 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Random;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
 @Service
 @AllArgsConstructor
@@ -144,12 +143,12 @@ public class ProductService {
         }
 
         if (!locked) {
-            log.error("❌ 락 획득 실패 - 다른 요청이 재고를 수정 중입니다. Product ID: {}", productId);
+            log.error(" 락 획득 실패 - 다른 요청이 재고를 수정 중입니다. Product ID: {}", productId);
             throw new IllegalStateException("다른 요청이 재고를 수정 중입니다. 잠시 후 다시 시도해주세요.");
         }
 
         try {
-            // 🔥🔥 트랜잭션은 DB 변경이 발생하는 부분에만 적용해야 한다!
+            //  트랜잭션은 DB 변경이 발생하는 부분에만 적용해야 한다!
             executeStockUpdate(productId, quantity);
         } finally {
             redisUtility.releaseLock(lockKey, requestId);
@@ -167,7 +166,7 @@ public class ProductService {
 
         int updatedStock = product.getStock() + quantity;
         if (updatedStock < 0) {
-            log.warn("🚨 재고 부족 - 요청 취소 (상품 ID: {}, 현재 재고: {}, 요청 수량: {})",
+            log.warn(" 재고 부족 - 요청 취소 (상품 ID: {}, 현재 재고: {}, 요청 수량: {})",
                     productId, product.getStock(), quantity);
             return;
         }

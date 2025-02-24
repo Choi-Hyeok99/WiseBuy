@@ -33,13 +33,13 @@ public class ProductConsumerService {
             int quantity = ((Number) dataMap.getOrDefault("quantity", 0)).intValue();
 
             if (productId == 0 || quantity == 0) {
-                log.warn("🚨 잘못된 Kafka 메시지 - productId: {}, quantity: {}", productId, quantity);
+                log.warn(" 잘못된 Kafka 메시지 - productId: {}, quantity: {}", productId, quantity);
                 return; // 잘못된 메시지 무시
             }
 
             log.info("📦 주문된 상품 ID: {}, 감소할 수량: {}", productId, quantity);
         } catch (Exception e) {
-            log.error("❌ Kafka 메시지 처리 중 오류 발생: ", e);
+            log.error(" Kafka 메시지 처리 중 오류 발생: ", e);
         }
     }
 
