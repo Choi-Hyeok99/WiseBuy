@@ -21,7 +21,7 @@ public class RedisUtility {
         this.objectMapper = objectMapper;
     }
 
-    // 🔹 Redis 분산락 Lua 스크립트
+    // Redis 분산락 Lua 스크립트
     private static final String LOCK_SCRIPT =
             "if redis.call('set', KEYS[1], ARGV[1], 'NX', 'PX', ARGV[2]) then " +
                     "    return 1 " +
@@ -40,7 +40,7 @@ public class RedisUtility {
     private static final DefaultRedisScript<Long> unlockScript = new DefaultRedisScript<>(UNLOCK_SCRIPT, Long.class);
 
     /**
-     * 🔹 락 획득 (Lua 스크립트 적용)
+     *  락 획득 (Lua 스크립트 적용)
      */
     public boolean acquireLock(String key, String requestId, long expireTimeMillis) {
         Long result = redisTemplate.execute(lockScript, Collections.singletonList(key), requestId, String.valueOf(expireTimeMillis));
@@ -55,7 +55,7 @@ public class RedisUtility {
     }
 
     /**
-     * 🔹 락 해제 (Lua 스크립트 적용)
+     *  락 해제 (Lua 스크립트 적용)
      */
     public boolean releaseLock(String key, String requestId) {
         // Lua 스크립트를 사용하여 락을 안전하게 해제
@@ -66,7 +66,7 @@ public class RedisUtility {
     }
 
     /**
-     * 🔹 TTL 없이 Redis 캐시에 저장 (객체 -> JSON 변환)
+     *  TTL 없이 Redis 캐시에 저장 (객체 -> JSON 변환)
      */
     public void saveToCache(String key, Object value) {
         try {
@@ -78,7 +78,7 @@ public class RedisUtility {
     }
 
     /**
-     * 🔹 TTL 설정 가능 (객체 -> JSON 변환)
+     *  TTL 설정 가능 (객체 -> JSON 변환)
      */
     public void saveToCache(String key, Object value, long ttlInSeconds) {
         try {
@@ -90,7 +90,7 @@ public class RedisUtility {
     }
 
     /**
-     * 🔹 캐시에서 값 조회 (JSON 문자열 -> 객체 변환)
+     *  캐시에서 값 조회 (JSON 문자열 -> 객체 변환)
      */
     public <T> T getFromCache(String key, Class<T> type) {
         String jsonValue = redisTemplate.opsForValue().get(key);
@@ -104,7 +104,7 @@ public class RedisUtility {
     }
 
     /**
-     * 🔹 Redis 캐시 삭제
+     *  Redis 캐시 삭제
      */
     public void deleteFromCache(String key) {
         redisTemplate.delete(key);
@@ -120,7 +120,7 @@ public class RedisUtility {
             }
 
             retryCount++;
-            log.warn("🔄 락 재시도 - Key: {}, 현재 재시도 횟수: {}", lockKey, retryCount);
+            log.warn(" 락 재시도 - Key: {}, 현재 재시도 횟수: {}", lockKey, retryCount);
 
             try {
                 Thread.sleep(retryDelay);

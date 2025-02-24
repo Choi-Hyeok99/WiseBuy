@@ -133,7 +133,7 @@ public class ProductService {
             long sleepTime = baseSleepTime * (1L << retryCount); // 지수 증가 (Exponential Backoff)
             sleepTime += new Random().nextInt(50); // 랜덤 지연 추가 (0~50ms)
 
-            log.info("🔄 락 재시도 - Product ID: {}, 현재 재시도 횟수: {}, 대기 시간: {} ms", productId, retryCount, sleepTime);
+            log.info(" 락 재시도 - Product ID: {}, 현재 재시도 횟수: {}, 대기 시간: {} ms", productId, retryCount, sleepTime);
             try {
                 Thread.sleep(sleepTime);
             } catch (InterruptedException e) {
@@ -156,7 +156,7 @@ public class ProductService {
 
         long endTime = System.currentTimeMillis(); // 실행 시간 측정 종료
         long executionTime = endTime - startTime;
-        log.info("⏳ 재고 업데이트 실행 시간: {} ms (Product ID: {})", executionTime, productId);
+        log.info(" 재고 업데이트 실행 시간: {} ms (Product ID: {})", executionTime, productId);
     }
 
     @Transactional  //  트랜잭션은 여기만 적용해야 함

@@ -23,7 +23,7 @@ public class ProductConsumerService {
 
     @KafkaListener(topics = "order.create", groupId = "product-service")
     public void consumerOrderEvent(@Payload KafkaMessage<Map<String, Object>> message) {
-        log.info("📩 Kafka 메시지 수신: {}", message);
+        log.info(" Kafka 메시지 수신: {}", message);
 
         try {
             Map<String, Object> dataMap = message.getData();
@@ -37,7 +37,7 @@ public class ProductConsumerService {
                 return; // 잘못된 메시지 무시
             }
 
-            log.info("📦 주문된 상품 ID: {}, 감소할 수량: {}", productId, quantity);
+            log.info(" 주문된 상품 ID: {}, 감소할 수량: {}", productId, quantity);
         } catch (Exception e) {
             log.error(" Kafka 메시지 처리 중 오류 발생: ", e);
         }
