@@ -26,14 +26,16 @@ public class ProductConsumerService {
         log.info("📩 Kafka 메시지 수신: {}", message);
 
         try {
-            // message.getData()에서 Map을 받아서 StockUpdateRequestDto로 변환
             Map<String, Object> dataMap = message.getData();
-            ObjectMapper objectMapper = new ObjectMapper();
-            StockUpdateRequestDto stockUpdateDto = objectMapper.convertValue(dataMap, StockUpdateRequestDto.class);
 
-            Long productId = stockUpdateDto.getProductId();
-            int quantity = stockUpdateDto.getQuantity();
+            // 직접 추출 후 타입 변환
+            Long productId = ((Number) dataMap.getOrDefault("productId", 0)).longValue();
+            int quantity = ((Number) dataMap.getOrDefault("quantity", 0)).intValue();
 
+            if (productId == 0 || quantity == 0) {
+                log.warn("🚨 잘못된 Kafka 메시지 - productId: {}, quantity: {}", productId, quantity);
+                return; // 잘못된 메시지 무시
+            }
 
             log.info("📦 주문된 상품 ID: {}, 감소할 수량: {}", productId, quantity);
         } catch (Exception e) {

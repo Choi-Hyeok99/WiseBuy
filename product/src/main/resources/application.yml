@@ -39,6 +39,7 @@ spring:
 
   kafka:
     consumer:
+      auto-offset-reset: earliest  # 메시지 손실 방지
       group-id: product-service
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
@@ -48,6 +49,9 @@ spring:
         spring.json.value.default.type.mapping:
           com.sparta.common.dto.KafkaMessage: com.sparta.product.dto.StockUpdateRequestDto
         spring.json.add.type.headers: true
+        session.timeout.ms: 60000         # 예: 60초
+        heartbeat.interval.ms: 10000      # 예: 10초
+        auto.offset.reset: earliest       # 오프셋이 없을 경우 처음부터 읽기
 
 eureka:
   client:

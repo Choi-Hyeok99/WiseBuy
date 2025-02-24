@@ -21,6 +21,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Random;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -114,35 +116,64 @@ public class ProductService {
         return stock;
     }
 
-    @Transactional
     public void updateStockWithDistributedLock(Long productId, int quantity) {
         String lockKey = "product_stock_lock:" + productId;
+        String requestId = UUID.randomUUID().toString();
 
-        // Redis 분산락 획득
-        boolean locked = redisUtility.acquireLock(lockKey, LOCK_TIMEOUT, TimeUnit.MILLISECONDS);
+        long startTime = System.currentTimeMillis(); // 실행 시간 측정 시작
+        boolean locked = false;
+        int retryCount = 0;
+        int maxRetry = 5; // 최대 재시도 횟수
+        long baseSleepTime = 100; // 기본 대기 시간 (ms)
+
+        while (retryCount < maxRetry) {
+            locked = redisUtility.acquireLockWithRetry(lockKey, requestId, 7000, 5);
+            if (locked) break;
+
+            retryCount++;
+            long sleepTime = baseSleepTime * (1L << retryCount); // 지수 증가 (Exponential Backoff)
+            sleepTime += new Random().nextInt(50); // 랜덤 지연 추가 (0~50ms)
+
+            log.info("🔄 락 재시도 - Product ID: {}, 현재 재시도 횟수: {}, 대기 시간: {} ms", productId, retryCount, sleepTime);
+            try {
+                Thread.sleep(sleepTime);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+
         if (!locked) {
+            log.error("❌ 락 획득 실패 - 다른 요청이 재고를 수정 중입니다. Product ID: {}", productId);
             throw new IllegalStateException("다른 요청이 재고를 수정 중입니다. 잠시 후 다시 시도해주세요.");
         }
 
         try {
-            // 재고 업데이트
-            Product product = productRepository.findById(productId)
-                                               .orElseThrow(() -> new NotFoundException("상품이 존재하지 않습니다. ID: " + productId));
-
-            int updatedStock = product.getStock() + quantity;
-            if (updatedStock < 0) {
-                throw new IllegalArgumentException("재고가 부족합니다. 현재 재고: " + product.getStock());
-            }
-
-            product.setStock(updatedStock);
-            productRepository.save(product);
-
-            // Redis 캐시 갱신
-            String stockKey = "product_stock:" + productId;
-            redisUtility.saveToCache(stockKey, updatedStock);
+            // 🔥🔥 트랜잭션은 DB 변경이 발생하는 부분에만 적용해야 한다!
+            executeStockUpdate(productId, quantity);
         } finally {
-            // 락 해제
-            redisUtility.releaseLock(lockKey);
+            redisUtility.releaseLock(lockKey, requestId);
         }
+
+        long endTime = System.currentTimeMillis(); // 실행 시간 측정 종료
+        long executionTime = endTime - startTime;
+        log.info("⏳ 재고 업데이트 실행 시간: {} ms (Product ID: {})", executionTime, productId);
+    }
+
+    @Transactional  //  트랜잭션은 여기만 적용해야 함
+    public void executeStockUpdate(Long productId, int quantity) {
+        Product product = productRepository.findById(productId)
+                                           .orElseThrow(() -> new NotFoundException("상품이 존재하지 않습니다."));
+
+        int updatedStock = product.getStock() + quantity;
+        if (updatedStock < 0) {
+            log.warn("🚨 재고 부족 - 요청 취소 (상품 ID: {}, 현재 재고: {}, 요청 수량: {})",
+                    productId, product.getStock(), quantity);
+            return;
+        }
+
+        product.setStock(updatedStock);
+        productRepository.saveAndFlush(product);
+        redisUtility.saveToCache("product_stock:" + productId, updatedStock);
     }
 }
