@@ -1,14 +1,31 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 
-// 10개의 서로 다른 userId를 미리 정의합니다.
+// 10개의 서로 다른 userId를 미리 정의
 const userIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-const productId = 15;  // 예시로 사용될 상품 ID
-const address = "서울시 강남구";  // 예시 주소
+const productId = 22;  // 예제 상품 ID
+const address = "서울시 강남구";  // 예제 주소
 
-// JWT 토큰
-const jwtToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJndXIwNzA5QG5hdmVyLmNvbSIsImFkZHJlc3MiOiIxMjMgTWFpbiBTdHJlZXQiLCJpYXQiOjE3MzczNTg3MjQsImV4cCI6MTczNzQ0NTEyNH0.5eylwkK5nTwnZtwOS_do_awI306467yOFUHF9xag4rA';
+// JWT 토큰 (테스트용, 실제 테스트 시 동적으로 설정 가능)
+const jwtToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJndXIwNzA5QG5hdmVyLmNvbSIsImFkZHJlc3MiOiIxMjMgTWFpbiBTdHJlZXQiLCJpYXQiOjE3NDAzNjQ0OTgsImV4cCI6MTc0MDQ1MDg5OH0.v2BQJYlVIUprPHp0R-hUbVx8QgrP45Uea1b-VXEQa1w';
 
+// K6 부하 테스트 옵션 설정
+export let options = {
+    scenarios: {
+        unique_users: {
+            executor: 'per-vu-iterations',
+            vus: 200, // 100명의 사용자가 동시에 요청
+            iterations: 1,
+            maxDuration: '1m',
+        },
+    },
+    thresholds: {
+        http_req_failed: ['rate<1'],  // HTTP 요청 실패율 1% 미만
+        http_req_duration: ['p(95)<10000']  // 95%의 요청이 10초 이내 완료
+    },
+};
+
+// 주문 생성 데이터 함수
 function createOrderData(userId) {
     return {
         userId: userId,
@@ -18,25 +35,11 @@ function createOrderData(userId) {
     };
 }
 
-export let options = {
-    scenarios: {
-        unique_users: {
-            executor: 'per-vu-iterations',
-            vus: 100,
-            iterations: 1,
-            maxDuration: '1m',
-        },
-    },
-    thresholds: {
-        http_req_failed: ['rate<1'],
-        http_req_duration: ['p(95)<10000']
-    },
-};
-
+// Kafka 기반 주문-결제 프로세스 테스트
 export default function () {
     let userId = userIds[Math.floor(Math.random() * userIds.length)];
 
-    // 1. 주문 생성
+    // 1️⃣ 주문 생성 (Order Service)
     let createOrderUrl = 'http://localhost:8000/order-service/orders';
     let orderData = createOrderData(userId);
     let createOrderResponse = http.post(createOrderUrl, JSON.stringify(orderData), {
@@ -59,45 +62,28 @@ export default function () {
 
     let orderId = createOrderResponse.json().orderId;
 
-    // 2. 결제 준비 API 호출
-    let preparePaymentUrl = `http://localhost:8000/order-service/orders/${orderId}/prepare-payment`;
-    let preparePaymentResponse = http.patch(preparePaymentUrl, null, {
+    // 2️⃣ 결제 요청 (Payment Service) -> HTTP 요청
+    let paymentUrl = 'http://localhost:8085/payments';
+    let paymentData = {
+        orderId: orderId,
+        userId: userId,
+        totalAmount: createOrderResponse.json().totalAmount,
+    };
+
+    let paymentResponse = http.post(paymentUrl, JSON.stringify(paymentData), {
         headers: {
+            'Content-Type': 'application/json',
             'Authorization': `Bearer ${jwtToken}`,
             'X-Claim-sub': userId.toString(),
-            'X-Claim-address': address,
         },
     });
 
-    check(preparePaymentResponse, {
-        'payment preparation is status 200': (r) => r.status === 200,
+    check(paymentResponse, {
+        'payment request is status 200': (r) => r.status === 200,
     });
 
-    if (preparePaymentResponse.status !== 200) {
-        console.error('Payment preparation failed', preparePaymentResponse.body);
+    if (paymentResponse.status !== 200) {
+        console.error('Payment request failed', paymentResponse.body);
         return;
     }
-
-    // 3. 결제 상태 업데이트 API 호출
-    let isPaymentSuccessful = Math.random() >= 0.2; // 80% 성공, 20% 실패
-    let updateOrderStatusUrl = `http://localhost:8000/order-service/orders/${orderId}/update-status?isPaymentSuccessful=${isPaymentSuccessful}`;
-    let updateOrderStatusResponse = http.post(updateOrderStatusUrl, null, {
-        headers: {
-            'Authorization': `Bearer ${jwtToken}`,
-            'X-Claim-sub': userId.toString(),
-        },
-    });
-
-    check(updateOrderStatusResponse, {
-        'order status update is status 200': (r) => r.status === 200 || r.status === 400, // 실패도 허용
-    });
-
-    // 로그 출력으로 성공/실패 확인
-    console.log(`Order ID: ${orderId}, Payment Successful: ${isPaymentSuccessful}`);
-
-    if (updateOrderStatusResponse.status !== 200) {
-        console.error('Order status update failed', updateOrderStatusResponse.body);
-    }
-
-    sleep(0.1); // 1초 대기 후 다음 유저로 넘어감
 }
