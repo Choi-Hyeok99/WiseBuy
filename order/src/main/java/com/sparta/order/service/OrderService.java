@@ -1,5 +1,6 @@
 package com.sparta.order.service;
 
+import com.sparta.common.dto.KafkaMessage;
 import com.sparta.common.dto.OrderResponseForPaymentDto;
 import com.sparta.common.dto.ProductResponseDto;
 import com.sparta.common.dto.WishlistItemDto;
@@ -30,6 +31,7 @@ public class OrderService {
     private final OrderItemRepository orderItemRepository;
     private final ProductClient productClient; // Feign Client
     private final PaymentClient paymentClient;
+    private final OrderProducerService orderProducerService;
 
 
     @Transactional
@@ -47,8 +49,16 @@ public class OrderService {
         order.setTotalAmount(totalAmount);
         orderRepository.save(order);
 
+        //  Kafka 이벤트 발행 (주문 생성 메시지)
+        KafkaMessage<OrderDto> message = new KafkaMessage<>(
+                "ORDER_CREATED",
+                new OrderDto(order.getId(), userId, totalAmount)
+        );
+
+        orderProducerService.sendMessage("order.create", message, String.valueOf(order.getId()));
+
         // 5. 응답 DTO 반환
-        return new OrderResponseDto(order); // 결제 요청 제거
+        return new OrderResponseDto(order);
     }
     @Transactional
     public void updateOrderStatusAfterPayment(Long orderId, boolean isPaymentSuccessful, Long userId) {

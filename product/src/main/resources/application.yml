@@ -6,8 +6,8 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     hikari:
-      maximum-pool-size: 50
-      minimum-idle: 10
+      maximum-pool-size: 100
+      minimum-idle: 20
       idle-timeout: 30000
       connection-timeout: 30000
       max-lifetime: 1800000
@@ -32,10 +32,30 @@ spring:
       timeout: 10000
       lettuce:
         pool:
-          max-active: 50
-          max-idle: 20
-          min-idle: 5
-          max-wait: 5000
+          max-active: 100
+          max-idle: 50
+          min-idle: 10
+          max-wait: 10000
+
+  kafka:
+    listener:
+      type: batch #  배치 모드 활성화
+      batch-size: 20 #  10개씩 묶어서 처리
+      concurrency: 5 #  Kafka Consumer를 3개의 스레드로 병렬 처리하도록 설정 (기본값: 1)
+    consumer:
+      auto-offset-reset: earliest  # 메시지 손실 방지
+      group-id: product-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+        spring.json.value.default.type: com.sparta.common.dto.KafkaMessage
+        spring.json.value.default.type.mapping:
+          com.sparta.common.dto.KafkaMessage: com.sparta.product.dto.StockUpdateRequestDto
+        spring.json.add.type.headers: true
+        session.timeout.ms: 60000         # 예: 60초
+        heartbeat.interval.ms: 10000      # 예: 10초
+        auto.offset.reset: earliest       # 오프셋이 없을 경우 처음부터 읽기
 
 eureka:
   client:
@@ -71,3 +91,25 @@ server:
       shutdown:
         await-termination: true
         await-termination-period: 30s
+
+resilience4j:
+  retry:
+    instances:
+      redis-lock-retry:
+        max-attempts: 5    #  최대 재시도 횟수
+        wait-duration: 100ms #  재시도 간격
+        enable-exponential-backoff: true  # 점진적으로 재시도 간격 증가
+        exponential-backoff-multiplier: 2 #  점진적 증가 적용
+        retry-exceptions:
+          - java.lang.IllegalStateException
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    retries:
+      enabled: true
+    resilience4j:
+      enabled: true

@@ -3,13 +3,13 @@ package com.sparta.user.entity;
 //import com.sparta.haengye_project.order.entity.Order;
 //import com.sparta.haengye_project.product.entitiy.Product;
 //import com.sparta.haengye_project.wishlist.entity.Wishlist;
+
 import com.sparta.user.dto.UserResponseDto;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 
 
 @Entity

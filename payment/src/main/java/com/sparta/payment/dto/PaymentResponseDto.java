@@ -10,4 +10,11 @@ public class PaymentResponseDto {
     private Long orderId;     // 주문 ID
     private String status;    // 결제 상태 (SUCCESS, FAILED)
     private int totalAmount;
+
+    public PaymentResponseDto(Long paymentId, Long orderId, String status, int totalAmount) {
+        this.paymentId = paymentId;
+        this.orderId = orderId;
+        this.status = status;
+        this.totalAmount = totalAmount;
+    }
 }

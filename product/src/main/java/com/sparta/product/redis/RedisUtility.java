@@ -1,79 +1,143 @@
 package com.sparta.product.redis;
 
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.script.RedisScript;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.resilience4j.retry.annotation.Retry;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
-
-import java.time.Duration;
-import java.util.List;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 
 @Component
+@Slf4j
 public class RedisUtility {
+    private final StringRedisTemplate redisTemplate;
+    private final ObjectMapper objectMapper; // JSON 변환을 위한 ObjectMapper 추가
 
-    private final RedisTemplate<String, Object> redisTemplate;
-
-    public RedisUtility(RedisTemplate<String, Object> redisTemplate) {
+    public RedisUtility(StringRedisTemplate redisTemplate, ObjectMapper objectMapper) {
         this.redisTemplate = redisTemplate;
+        this.objectMapper = objectMapper;
     }
 
-    // Redis에서 분산락을 획득
-    public boolean tryLock(String key) {
-        return redisTemplate.opsForValue().setIfAbsent(key, "LOCK", 10, TimeUnit.SECONDS);
-    }
+    // Redis 분산락 Lua 스크립트
+    private static final String LOCK_SCRIPT =
+            "if redis.call('set', KEYS[1], ARGV[1], 'NX', 'PX', ARGV[2]) then " +
+                    "    return 1 " +
+                    "else " +
+                    "    return 0 " +
+                    "end";
 
-    // Redis 락 해제
-    public void releaseLock(String key) {
-        redisTemplate.delete(key);
-    }
+    private static final String UNLOCK_SCRIPT =
+            "if redis.call('get', KEYS[1]) == ARGV[1] then " +
+                    "    return redis.call('del', KEYS[1]) " +
+                    "else " +
+                    "    return 0 " +
+                    "end";
 
+    private static final DefaultRedisScript<Long> lockScript = new DefaultRedisScript<>(LOCK_SCRIPT, Long.class);
+    private static final DefaultRedisScript<Long> unlockScript = new DefaultRedisScript<>(UNLOCK_SCRIPT, Long.class);
 
-
-
-    // ( 변경 후 )
-    public boolean acquireLock(String lockKey, long timeout, TimeUnit timeUnit) {
-        int maxRetryCount = 10; // 최대 재시도 횟수
-        long retryInterval = 100; // 재시도 간격 (밀리초 단위)
-
-        for (int i = 0; i < maxRetryCount; i++) {
-            Boolean success = redisTemplate.opsForValue().setIfAbsent(lockKey, "locked", timeout, timeUnit);
-            if (Boolean.TRUE.equals(success)) {
-                return true; // 락을 성공적으로 획득한 경우 true 반환
-            }
-            try {
-                Thread.sleep(retryInterval); // 재시도 간격만큼 대기
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt(); // 스레드 인터럽트 상태 복구
-                throw new IllegalStateException("락 획득 중 인터럽트가 발생했습니다.", e);
-            }
+    /**
+     * 락 해제 (Lua 스크립트 적용)
+     */
+    public boolean releaseLock(String key, String requestId) {
+        String currentLockOwner = redisTemplate.opsForValue()
+                                               .get(key);
+        if (!requestId.equals(currentLockOwner)) {
+            log.warn("다른 요청이 락을 가지고 있음 - Key: {}, 기존 Owner: {}, 요청 Owner: {}", key, currentLockOwner, requestId);
+            return false;
         }
 
-        return false; // 최대 재시도 횟수를 초과하면 false 반환
+        Long result = redisTemplate.execute(unlockScript, Collections.singletonList(key), requestId);
+        boolean success = result != null && result == 1;
+
+        if (success) {
+            log.info("Redis Lock 해제 성공 - Key: {}, RequestID: {}", key, requestId);
+        } else {
+            log.warn("Redis Lock 해제 실패 - Key: {}, RequestID: {}", key, requestId);
+        }
+        return success;
     }
 
-    // TTL 없이 저장 (기본 저장 방식 유지)
+    /**
+     * TTL 없이 Redis 캐시에 저장 (객체 -> JSON 변환)
+     */
     public void saveToCache(String key, Object value) {
-        redisTemplate.opsForValue().set(key, value);
-    }
-
-    // TTL 설정 가능
-    public void saveToCache(String key, Object value, long ttlInSeconds) {
-        redisTemplate.opsForValue().set(key, value, ttlInSeconds, TimeUnit.SECONDS);
-    }
-
-
-    // 제네릭을 활용한 값 조회 메서드
-    public <T> T getFromCache(String key, Class<T> type) {
-        Object value = redisTemplate.opsForValue().get(key);
-        if (value != null && type.isInstance(value)) {
-            return type.cast(value); // 지정된 타입으로 안전하게 반환
+        try {
+            String jsonValue = objectMapper.writeValueAsString(value); // 객체 -> JSON 문자열 변환
+            redisTemplate.opsForValue()
+                         .set(key, jsonValue);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Redis 저장 오류: JSON 변환 실패", e);
         }
-        return null; // 캐시에 값이 없거나 타입이 일치하지 않으면 null 반환
     }
 
+    /**
+     * TTL 설정 가능 (객체 -> JSON 변환)
+     */
+    public void saveToCache(String key, Object value, long ttlInSeconds) {
+        try {
+            String jsonValue = objectMapper.writeValueAsString(value); // 객체 -> JSON 변환
+            redisTemplate.opsForValue()
+                         .set(key, jsonValue, ttlInSeconds, TimeUnit.SECONDS);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Redis 저장 오류: JSON 변환 실패", e);
+        }
+    }
 
-    // 값 삭제
+    /**
+     * 캐시에서 값 조회 (JSON 문자열 -> 객체 변환)
+     */
+    public <T> T getFromCache(String key, Class<T> type) {
+        String jsonValue = redisTemplate.opsForValue()
+                                        .get(key);
+        if (jsonValue == null) return null;
+
+        try {
+            return objectMapper.readValue(jsonValue, type); // JSON 문자열 -> 객체 변환
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Redis 조회 오류: JSON 변환 실패", e);
+        }
+    }
+
+    /**
+     * Redis 캐시 삭제
+     */
     public void deleteFromCache(String key) {
         redisTemplate.delete(key);
+    }
+
+    // Resilience4j Retry 적용 (자동 재시도 기능 추가)
+    @Retry(name = "redis-lock-retry", fallbackMethod = "fallbackAcquireLock")
+    public boolean acquireLockWithRetry(String lockKey, String requestId, long expireTimeMillis) {
+        boolean locked = acquireLock(lockKey, requestId, expireTimeMillis);
+        if (!locked) {
+            throw new IllegalStateException("Redis Lock 획득 실패: " + lockKey);
+        }
+        return true;
+    }
+
+    // Redis 락 획득 실패 시 실행할 Fallback 메서드
+    public boolean fallbackAcquireLock(String lockKey, String requestId, long expireTimeMillis, Exception ex) {
+        log.error("Redis Lock 획득 실패: {}, RequestID: {} - 예외 발생: {}", lockKey, requestId, ex.getMessage());
+        return false;
+    }
+
+
+    // 기존 락 획득 메서드 (Lua 기반 적용)
+    public boolean acquireLock(String key, String requestId, long expireTimeMillis) {
+        Long result = redisTemplate.execute(
+                new DefaultRedisScript<>(LOCK_SCRIPT, Long.class),
+                Collections.singletonList(key), requestId, String.valueOf(expireTimeMillis));
+
+        if (result != null && result == 1) {
+            log.info("Redis Lock 획득 성공 - Key: {}, RequestID: {}, ExpireTime: {}ms", key, requestId, expireTimeMillis);
+            return true;
+        } else {
+            log.warn("Redis Lock 획득 실패 - Key: {}, RequestID: {}", key, requestId);
+            return false;
+        }
     }
 }

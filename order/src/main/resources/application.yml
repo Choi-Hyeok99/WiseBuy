@@ -39,6 +39,19 @@ spring:
           read-timeout: 5000    # 읽기 타임아웃 (밀리초)
           logger-level: FULL    # Feign 통신 로그 출력 수준 (FULL로 하면 요청/응답 모두 확인 가능)
 
+  kafka:
+    bootstrap-servers: localhost:9092  # Kafka 서버의 주소 (Docker 환경에서는 localhost:9092 사용)
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer  # 키를 String으로 직렬화
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer  # 값은 JSON 직렬화
+      properties:
+        spring.json.add.type.headers: true  # 메시지에 타입 헤더 포함
+    consumer:
+      group-id: order-service  # Order 서비스용 Kafka 컨슈머 그룹 ID
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"  # 모든 패키지에서 DTO 역직렬화 허용
 
 eureka:
   client:

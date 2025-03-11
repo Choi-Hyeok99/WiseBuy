@@ -1,7 +1,6 @@
 package com.sparta.payment.service;
 
-import com.sparta.common.dto.OrderResponseForPaymentDto;
-import com.sparta.payment.client.OrderClient;
+import com.sparta.common.dto.KafkaMessage;
 import com.sparta.payment.dto.PaymentRequestDto;
 import com.sparta.payment.dto.PaymentResponseDto;
 import com.sparta.payment.entity.Payment;
@@ -18,7 +17,7 @@ import java.time.LocalDateTime;
 public class PaymentService {
 
     private final PaymentRepository paymentRepository;
-    private final OrderClient orderClient; // OrderClient 의존성 추가
+    private final PaymentProducerService paymentProducerService;
 
     @Transactional
     public PaymentResponseDto processPayment(PaymentRequestDto paymentRequestDto, Long userId) {
@@ -28,8 +27,8 @@ public class PaymentService {
         }
 
         // 결제 처리 로직 (80% 성공, 20% 실패)
-//        boolean isPaymentSuccessful = Math.random() > 0.2; ( 실제 테스트 )
-        boolean isPaymentSuccessful = Math.random() > 0.2; // 성공 테스트 확인 여부
+        // boolean isPaymentSuccessful = Math.random() > 0.2; ( 실제 테스트 )
+        boolean isPaymentSuccessful = Math.random() > 0; // 성공 테스트 확인 여부
         PaymentStatus status = isPaymentSuccessful ? PaymentStatus.SUCCESS : PaymentStatus.FAILED;
 
         // Payment 엔티티 생성 및 저장
@@ -41,21 +40,13 @@ public class PaymentService {
         payment.setPaymentDate(LocalDateTime.now());
         paymentRepository.save(payment);
 
-        // 주문 상태 업데이트 (Feign Client 호출)
-        try {
-            orderClient.updateOrderStatus(paymentRequestDto.getOrderId(), isPaymentSuccessful, userId);
-        } catch (Exception e) {
-            // 예외 처리: Order 상태 업데이트 실패
-            throw new IllegalStateException("주문 상태 업데이트 중 문제가 발생했습니다.", e);
-        }
+        // Kafka 이벤트 발행 ( payment.success or payment.failed )
+        String eventType = isPaymentSuccessful ? "PAYMENT_SUCCESS" : "PAYMENT_FAILED";
+        KafkaMessage<PaymentResponseDto> message = new KafkaMessage<>(eventType,
+                new PaymentResponseDto(payment.getId(), payment.getOrderId(),payment.getStatus().name(), payment.getTotalPrice()));
+
+        paymentProducerService.sendPaymentResult("payment.result", message);
 
         // 응답 DTO 생성 및 반환
-        PaymentResponseDto responseDto = new PaymentResponseDto();
-        responseDto.setPaymentId(payment.getId());
-        responseDto.setOrderId(paymentRequestDto.getOrderId());
-        responseDto.setStatus(status.name());
-        responseDto.setTotalAmount(paymentRequestDto.getTotalAmount());
-
-        return responseDto;
-    }
+        return new PaymentResponseDto(payment.getId(), payment.getOrderId(), payment.getStatus().name(), payment.getTotalPrice());    }
 }

@@ -6,11 +6,11 @@ import com.sparta.product.dto.ProductResponseDto;
 import com.sparta.product.entitiy.Product;
 import com.sparta.product.entitiy.ProductStatus;
 import com.sparta.product.entitiy.ProductType;
-import com.sparta.product.exception.ForbiddenException;
 import com.sparta.product.exception.NotFoundException;
 import com.sparta.product.exception.UnauthorizedException;
-import com.sparta.product.repository.ProductRepository;
 import com.sparta.product.redis.RedisUtility;
+import com.sparta.product.repository.ProductRepository;
+import io.github.resilience4j.retry.annotation.Retry;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,13 +18,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.time.LocalDateTime;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
+import java.util.UUID;
+
 
 @Service
 @AllArgsConstructor
@@ -33,7 +31,6 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final RedisUtility redisUtility; // Redis 유틸리티 추가
-
     private static final String STOCK_KEY_PREFIX = "product_stock:";
     private static final int LOCK_TIMEOUT = 1000; // 밀리초 단위
 
@@ -112,40 +109,47 @@ public class ProductService {
                                      .orElseThrow(() -> new NotFoundException("해당 상품이 존재하지 않습니다. 상품 ID: " + productId));
 
         // Redis 캐시에 저장 (TTL 설정 가능)
-        redisUtility.saveToCache(stockKey, stock, 3600); // 1시간 TTL
+        redisUtility.saveToCache(stockKey, stock, 300); // 300초 TTL
 
         return stock;
     }
 
     @Transactional
+    @Retry(name = "redis-lock-retry", fallbackMethod = "fallbackLockFailure")
     public void updateStockWithDistributedLock(Long productId, int quantity) {
         String lockKey = "product_stock_lock:" + productId;
+        String requestId = UUID.randomUUID().toString();
 
-        // Redis 분산락 획득
-        boolean locked = redisUtility.acquireLock(lockKey, LOCK_TIMEOUT, TimeUnit.MILLISECONDS);
+        boolean locked = redisUtility.acquireLockWithRetry(lockKey, requestId, 8000);
         if (!locked) {
             throw new IllegalStateException("다른 요청이 재고를 수정 중입니다. 잠시 후 다시 시도해주세요.");
         }
 
         try {
-            // 재고 업데이트
-            Product product = productRepository.findById(productId)
-                                               .orElseThrow(() -> new NotFoundException("상품이 존재하지 않습니다. ID: " + productId));
-
-            int updatedStock = product.getStock() + quantity;
-            if (updatedStock < 0) {
-                throw new IllegalArgumentException("재고가 부족합니다. 현재 재고: " + product.getStock());
-            }
-
-            product.setStock(updatedStock);
-            productRepository.save(product);
-
-            // Redis 캐시 갱신
-            String stockKey = "product_stock:" + productId;
-            redisUtility.saveToCache(stockKey, updatedStock);
+            executeStockUpdate(productId, quantity);
         } finally {
-            // 락 해제
-            redisUtility.releaseLock(lockKey);
+            redisUtility.releaseLock(lockKey, requestId);
         }
+    }
+
+    @Transactional  //  트랜잭션은 여기만 적용해야 함
+    public void executeStockUpdate(Long productId, int quantity) {
+        Product product = productRepository.findById(productId)
+                                           .orElseThrow(() -> new NotFoundException("상품이 존재하지 않습니다."));
+
+        int updatedStock = product.getStock() + quantity;
+        if (updatedStock < 0) {
+            log.warn(" 재고 부족 - 요청 취소 (상품 ID: {}, 현재 재고: {}, 요청 수량: {})",
+                    productId, product.getStock(), quantity);
+            return;
+        }
+
+        product.setStock(updatedStock);
+        productRepository.saveAndFlush(product);
+        redisUtility.saveToCache("product_stock:" + productId, updatedStock);
+    }
+    // Fallback 메서드 - 락 획득 실패 시 실행
+    private void fallbackLockFailure(Long productId, int quantity, Throwable t) {
+        log.error("재고 업데이트 실패 (상품 ID: {}, 수량: {}) 예외: {}", productId, quantity, t.getMessage());
     }
 }

@@ -8,6 +8,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -26,8 +27,12 @@ public interface ProductRepository extends JpaRepository<Product,Long> {
     Optional<Product> findByIdWithProductInfo(@Param("productId") Long productId);
 
 
-    // **재고(stock)만 조회하는 최적화된 쿼리**
+    // 재고(stock)만 조회하는 최적화된 쿼리
     @Query("SELECT p.stock FROM Product p WHERE p.id = :productId")
     Optional<Integer> findStockById(@Param("productId") Long productId);
 
+    // 재고 업데이트 쿼리 추가
+    @Modifying
+    @Query("UPDATE Product p SET p.stock = :updatedStock WHERE p.id = :productId")
+    void updateStock(@Param("productId") Long productId, @Param("updatedStock") int updatedStock);
 }
