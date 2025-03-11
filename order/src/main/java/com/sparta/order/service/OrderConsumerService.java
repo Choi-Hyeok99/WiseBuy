@@ -45,7 +45,7 @@ public class OrderConsumerService {
                             "productId", item.getProductId(),
                             "quantity", item.getQuantity()
                     ));
-                    orderProducerService.sendMessage("stock.rollback", rollbackMessage);
+                    orderProducerService.sendMessage("stock.rollback", rollbackMessage,String.valueOf(item.getProductId()));
                 }
                 log.info("결제 실패 -> 주문 취소, 재고 롤백 이벤트 발행 : 주문 ID {}", orderId);
             }

@@ -55,7 +55,7 @@ public class OrderService {
                 new OrderDto(order.getId(), userId, totalAmount)
         );
 
-        orderProducerService.sendMessage("order.create", message);
+        orderProducerService.sendMessage("order.create", message, String.valueOf(order.getId()));
 
         // 5. 응답 DTO 반환
         return new OrderResponseDto(order);

@@ -10,6 +10,7 @@ import com.sparta.product.exception.NotFoundException;
 import com.sparta.product.exception.UnauthorizedException;
 import com.sparta.product.redis.RedisUtility;
 import com.sparta.product.repository.ProductRepository;
+import io.github.resilience4j.retry.annotation.Retry;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,10 +20,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.time.LocalDateTime;
-import java.util.Random;
 import java.util.UUID;
+
 
 @Service
 @AllArgsConstructor
@@ -31,7 +31,6 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final RedisUtility redisUtility; // Redis 유틸리티 추가
-
     private static final String STOCK_KEY_PREFIX = "product_stock:";
     private static final int LOCK_TIMEOUT = 1000; // 밀리초 단위
 
@@ -110,53 +109,27 @@ public class ProductService {
                                      .orElseThrow(() -> new NotFoundException("해당 상품이 존재하지 않습니다. 상품 ID: " + productId));
 
         // Redis 캐시에 저장 (TTL 설정 가능)
-        redisUtility.saveToCache(stockKey, stock, 3600); // 1시간 TTL
+        redisUtility.saveToCache(stockKey, stock, 300); // 300초 TTL
 
         return stock;
     }
 
+    @Transactional
+    @Retry(name = "redis-lock-retry", fallbackMethod = "fallbackLockFailure")
     public void updateStockWithDistributedLock(Long productId, int quantity) {
         String lockKey = "product_stock_lock:" + productId;
         String requestId = UUID.randomUUID().toString();
 
-        long startTime = System.currentTimeMillis(); // 실행 시간 측정 시작
-        boolean locked = false;
-        int retryCount = 0;
-        int maxRetry = 5; // 최대 재시도 횟수
-        long baseSleepTime = 100; // 기본 대기 시간 (ms)
-
-        while (retryCount < maxRetry) {
-            locked = redisUtility.acquireLockWithRetry(lockKey, requestId, 7000, 5);
-            if (locked) break;
-
-            retryCount++;
-            long sleepTime = baseSleepTime * (1L << retryCount); // 지수 증가 (Exponential Backoff)
-            sleepTime += new Random().nextInt(50); // 랜덤 지연 추가 (0~50ms)
-
-            log.info(" 락 재시도 - Product ID: {}, 현재 재시도 횟수: {}, 대기 시간: {} ms", productId, retryCount, sleepTime);
-            try {
-                Thread.sleep(sleepTime);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            }
-        }
-
+        boolean locked = redisUtility.acquireLockWithRetry(lockKey, requestId, 8000);
         if (!locked) {
-            log.error(" 락 획득 실패 - 다른 요청이 재고를 수정 중입니다. Product ID: {}", productId);
             throw new IllegalStateException("다른 요청이 재고를 수정 중입니다. 잠시 후 다시 시도해주세요.");
         }
 
         try {
-            //  트랜잭션은 DB 변경이 발생하는 부분에만 적용해야 한다!
             executeStockUpdate(productId, quantity);
         } finally {
             redisUtility.releaseLock(lockKey, requestId);
         }
-
-        long endTime = System.currentTimeMillis(); // 실행 시간 측정 종료
-        long executionTime = endTime - startTime;
-        log.info(" 재고 업데이트 실행 시간: {} ms (Product ID: {})", executionTime, productId);
     }
 
     @Transactional  //  트랜잭션은 여기만 적용해야 함
@@ -174,5 +147,9 @@ public class ProductService {
         product.setStock(updatedStock);
         productRepository.saveAndFlush(product);
         redisUtility.saveToCache("product_stock:" + productId, updatedStock);
+    }
+    // Fallback 메서드 - 락 획득 실패 시 실행
+    private void fallbackLockFailure(Long productId, int quantity, Throwable t) {
+        log.error("재고 업데이트 실패 (상품 ID: {}, 수량: {}) 예외: {}", productId, quantity, t.getMessage());
     }
 }

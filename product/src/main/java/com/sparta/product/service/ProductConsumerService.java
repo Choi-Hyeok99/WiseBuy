@@ -1,9 +1,8 @@
 package com.sparta.product.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sparta.common.dto.KafkaMessage;
-import com.sparta.product.dto.StockUpdateRequestDto;
 import com.sparta.product.entitiy.Product;
+import com.sparta.product.redis.RedisUtility;
 import com.sparta.product.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,7 +11,9 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @Slf4j
@@ -20,27 +21,54 @@ import java.util.Map;
 public class ProductConsumerService {
 
     private final ProductRepository productRepository;
+    private final RedisUtility redisUtility;
 
-    @KafkaListener(topics = "order.create", groupId = "product-service")
-    public void consumerOrderEvent(@Payload KafkaMessage<Map<String, Object>> message) {
-        log.info(" Kafka 메시지 수신: {}", message);
+    private static final String STOCK_KEY_PREFIX = "product_stock:";
 
-        try {
-            Map<String, Object> dataMap = message.getData();
+    @KafkaListener(topics = "order.create", groupId = "product-service", containerFactory = "batchFactory")
+    public void consumeOrderEvents(@Payload List<KafkaMessage<Map<String, Object>>> messages) {
+        log.info("Batch 메시지 수신: {}개", messages.size());
 
-            // 직접 추출 후 타입 변환
-            Long productId = ((Number) dataMap.getOrDefault("productId", 0)).longValue();
-            int quantity = ((Number) dataMap.getOrDefault("quantity", 0)).intValue();
+        messages.forEach(message -> {
+            try {
+                Long productId = ((Number) message.getData().getOrDefault("productId", 0)).longValue();
+                int quantity = ((Number) message.getData().getOrDefault("quantity", 0)).intValue();
 
-            if (productId == 0 || quantity == 0) {
-                log.warn(" 잘못된 Kafka 메시지 - productId: {}, quantity: {}", productId, quantity);
-                return; // 잘못된 메시지 무시
+                if (productId > 0 && quantity > 0) {
+                    updateStockAsync(productId, quantity);
+                }
+            } catch (Exception e) {
+                log.error("Kafka 메시지 처리 중 오류 발생", e);
+            }
+        });
+    }
+    /**
+     * 비동기 재고 감소 (Redis 캐시 기반)
+     */
+    private void updateStockAsync(Long productId, int quantity) {
+        CompletableFuture.runAsync(() -> {
+            String stockKey = STOCK_KEY_PREFIX + productId;
+            Integer currentStock = redisUtility.getFromCache(stockKey, Integer.class);
+
+            if (currentStock == null) {
+                log.warn("Redis 캐시에 해당 상품이 없음. DB에서 조회");
+                currentStock = productRepository.findStockById(productId)
+                                                .orElseThrow(() -> new IllegalArgumentException("상품이 존재하지 않습니다."));
             }
 
-            log.info(" 주문된 상품 ID: {}, 감소할 수량: {}", productId, quantity);
-        } catch (Exception e) {
-            log.error(" Kafka 메시지 처리 중 오류 발생: ", e);
-        }
+            int updatedStock = currentStock - quantity;
+            if (updatedStock < 0) {
+                log.warn("재고 부족 - 요청 취소 (상품 ID: {}, 현재 재고: {}, 요청 수량: {})",
+                        productId, currentStock, quantity);
+                return;
+            }
+
+            // Redis 및 DB 동시 업데이트
+            redisUtility.saveToCache(stockKey, updatedStock);
+            productRepository.updateStock(productId, updatedStock);
+
+            log.info("비동기 재고 감소 완료 - 상품 ID: {}, 남은 재고: {}", productId, updatedStock);
+        });
     }
 
     @KafkaListener(topics = "stock.rollback", groupId = "product-service")
