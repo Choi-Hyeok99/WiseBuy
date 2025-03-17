@@ -3,6 +3,7 @@ package com.sparta.product.service;
 import com.sparta.product.dto.ProductDetailResponseDto;
 import com.sparta.product.dto.ProductRequestDto;
 import com.sparta.product.dto.ProductResponseDto;
+import com.sparta.product.dto.StockUpdateRequestDto;
 import com.sparta.product.entitiy.Product;
 import com.sparta.product.entitiy.ProductStatus;
 import com.sparta.product.entitiy.ProductType;
@@ -18,10 +19,13 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 
 @Service
@@ -32,6 +36,7 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final RedisUtility redisUtility; // Redis 유틸리티 추가
     private static final String STOCK_KEY_PREFIX = "product_stock:";
+    private final KafkaTemplate kafkaTemplate;
     private static final int LOCK_TIMEOUT = 1000; // 밀리초 단위
 
 
@@ -117,19 +122,29 @@ public class ProductService {
     @Transactional
     @Retry(name = "redis-lock-retry", fallbackMethod = "fallbackLockFailure")
     public void updateStockWithDistributedLock(Long productId, int quantity) {
-        String lockKey = "product_stock_lock:" + productId;
         String requestId = UUID.randomUUID().toString();
 
-        boolean locked = redisUtility.acquireLockWithRetry(lockKey, requestId, 8000);
-        if (!locked) {
-            throw new IllegalStateException("다른 요청이 재고를 수정 중입니다. 잠시 후 다시 시도해주세요.");
+        Long updatedStock = redisUtility.updateStockInRedis(String.valueOf(productId), quantity);
+        if (updatedStock == -1) {
+            throw new NotFoundException("상품이 존재하지 않습니다.");
+        }
+        if (updatedStock == -2) {
+            throw new IllegalStateException("재고 부족으로 주문이 취소되었습니다.");
         }
 
-        try {
-            executeStockUpdate(productId, quantity);
-        } finally {
-            redisUtility.releaseLock(lockKey, requestId);
-        }
+        // Kafka 이벤트 발행 (비동기 DB 업데이트)
+        StockUpdateRequestDto stockUpdateEvent = new StockUpdateRequestDto(productId, quantity);
+
+        CompletableFuture<SendResult<String, StockUpdateRequestDto>> future =
+                kafkaTemplate.send("stock.update", stockUpdateEvent);
+
+        future.whenComplete((result, ex) -> {
+            if (ex == null) {
+                log.info("Kafka 메시지 전송 성공: {}", stockUpdateEvent);
+            } else {
+                log.error("Kafka 메시지 전송 실패: {}", ex.getMessage());
+            }
+        });
     }
 
     @Transactional  //  트랜잭션은 여기만 적용해야 함
@@ -137,16 +152,15 @@ public class ProductService {
         Product product = productRepository.findById(productId)
                                            .orElseThrow(() -> new NotFoundException("상품이 존재하지 않습니다."));
 
-        int updatedStock = product.getStock() + quantity;
+        int updatedStock = product.getStock() - quantity;
         if (updatedStock < 0) {
-            log.warn(" 재고 부족 - 요청 취소 (상품 ID: {}, 현재 재고: {}, 요청 수량: {})",
-                    productId, product.getStock(), quantity);
-            return;
+            throw new IllegalStateException("재고 부족으로 주문이 취소되었습니다.");
         }
 
         product.setStock(updatedStock);
-        productRepository.saveAndFlush(product);
-        redisUtility.saveToCache("product_stock:" + productId, updatedStock);
+        productRepository.save(product);
+
+        redisUtility.saveToCache(STOCK_KEY_PREFIX + productId, updatedStock);
     }
     // Fallback 메서드 - 락 획득 실패 시 실행
     private void fallbackLockFailure(Long productId, int quantity, Throwable t) {

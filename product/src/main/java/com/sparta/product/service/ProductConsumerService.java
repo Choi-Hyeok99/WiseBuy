@@ -1,7 +1,9 @@
 package com.sparta.product.service;
 
 import com.sparta.common.dto.KafkaMessage;
+import com.sparta.product.dto.StockUpdateRequestDto;
 import com.sparta.product.entitiy.Product;
+import com.sparta.product.exception.NotFoundException;
 import com.sparta.product.redis.RedisUtility;
 import com.sparta.product.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
@@ -73,24 +75,38 @@ public class ProductConsumerService {
 
     @KafkaListener(topics = "stock.rollback", groupId = "product-service")
     @Transactional
-    public void rollbackOrderEvent(@Payload KafkaMessage<Map<String, Object>> message){
+    public void rollbackOrderEvent(@Payload KafkaMessage<Map<String, Object>> message) {
         log.info("Kafka 재고 롤백 이벤트 수신 {}", message);
 
-        try{
+        try {
             Map<String, Object> datamap = message.getData();
             Long productId = ((Number) datamap.get("productId")).longValue();
             int quantity = (int) datamap.get("quantity");
 
-            Product product = productRepository.findById(productId)
-                                               .orElseThrow(()-> new IllegalArgumentException("상품을 찾을 수 없습니다."));
+            // Redis에서 원자적으로 재고 복구 수행
+            Long rolledBackStock = redisUtility.rollbackStockInRedis(String.valueOf(productId), quantity);
 
-            // 주문이 취소되었으므로 재고 복구
-            product.setStock(product.getStock() + quantity);
-            productRepository.save(product);
-            log.info("재고 복구 완료 : 상품 ID {} -> {}개 증가", productId, quantity);
+            if (rolledBackStock == -1) {
+                throw new NotFoundException("상품이 존재하지 않습니다.");
+            }
 
-        } catch (Exception e){
-            log.error("Kafka 재고 롤백 이벤트 처리 중 오류 발생 : ",e);
+            log.info("재고 복구 완료 - 상품 ID: {}, 복원된 재고: {}", productId, rolledBackStock);
+        } catch (Exception e) {
+            log.error("Kafka 재고 롤백 이벤트 처리 중 오류 발생 : ", e);
         }
+    }
+    @KafkaListener(topics = "stock.update", groupId = "product-service", containerFactory = "kafkaListenerContainerFactory")
+    @Transactional
+    public void consumeStockUpdate(@Payload StockUpdateRequestDto message) {
+        Long productId = message.getProductId();
+        int quantity = message.getQuantity();
+
+        Product product = productRepository.findById(productId)
+                                           .orElseThrow(() -> new NotFoundException("상품이 존재하지 않습니다."));
+
+        product.setStock(product.getStock() - quantity);
+        productRepository.save(product);
+
+        log.info("DB에 비동기적으로 재고 반영 완료 - 상품 ID: {}, 차감된 수량: {}", productId, quantity);
     }
 }

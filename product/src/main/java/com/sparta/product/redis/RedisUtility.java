@@ -21,7 +21,6 @@ public class RedisUtility {
         this.objectMapper = objectMapper;
     }
 
-    // Redis 분산락 Lua 스크립트
     private static final String LOCK_SCRIPT =
             "if redis.call('set', KEYS[1], ARGV[1], 'NX', 'PX', ARGV[2]) then " +
                     "    return 1 " +
@@ -36,80 +35,75 @@ public class RedisUtility {
                     "    return 0 " +
                     "end";
 
+    private static final String STOCK_UPDATE_SCRIPT =
+            "local stock = redis.call('get', KEYS[1]) " +
+                    "if not stock then " +
+                    "   return -1 " +
+                    "end " +
+                    "stock = tonumber(stock) " +
+                    "if stock < tonumber(ARGV[1]) then " +
+                    "   return -2 " +
+                    "end " +
+                    "redis.call('decrby', KEYS[1], ARGV[1]) " +
+                    "return stock - ARGV[1]";
+
+    private static final String STOCK_ROLLBACK_SCRIPT =
+            "local stock = redis.call('get', KEYS[1]) " +
+                    "if not stock then return -1 end " +
+                    "stock = tonumber(stock) " +
+                    "redis.call('incrby', KEYS[1], ARGV[1]) " +
+                    "return stock + ARGV[1]";
+
+
     private static final DefaultRedisScript<Long> lockScript = new DefaultRedisScript<>(LOCK_SCRIPT, Long.class);
     private static final DefaultRedisScript<Long> unlockScript = new DefaultRedisScript<>(UNLOCK_SCRIPT, Long.class);
+    private static final DefaultRedisScript<Long> stockUpdateScript = new DefaultRedisScript<>(STOCK_UPDATE_SCRIPT, Long.class);
+    private static final DefaultRedisScript<Long> stockRollbackScript = new DefaultRedisScript<>(STOCK_ROLLBACK_SCRIPT, Long.class);
 
-    /**
-     * 락 해제 (Lua 스크립트 적용)
-     */
-    public boolean releaseLock(String key, String requestId) {
-        String currentLockOwner = redisTemplate.opsForValue()
-                                               .get(key);
-        if (!requestId.equals(currentLockOwner)) {
-            log.warn("다른 요청이 락을 가지고 있음 - Key: {}, 기존 Owner: {}, 요청 Owner: {}", key, currentLockOwner, requestId);
-            return false;
-        }
 
-        Long result = redisTemplate.execute(unlockScript, Collections.singletonList(key), requestId);
-        boolean success = result != null && result == 1;
+    public boolean acquireLock(String key, String requestId, long expireTimeMillis) {
+        String lockKey = "lock:" + key; // 락 키 세분화
+        Long result = redisTemplate.execute(lockScript, Collections.singletonList(lockKey), requestId, String.valueOf(expireTimeMillis));
 
-        if (success) {
-            log.info("Redis Lock 해제 성공 - Key: {}, RequestID: {}", key, requestId);
-        } else {
-            log.warn("Redis Lock 해제 실패 - Key: {}, RequestID: {}", key, requestId);
-        }
-        return success;
+        return result != null && result == 1;
     }
+    public boolean releaseLock(String key, String requestId) {
+        Long result = redisTemplate.execute(unlockScript, Collections.singletonList(key), requestId);
 
-    /**
-     * TTL 없이 Redis 캐시에 저장 (객체 -> JSON 변환)
-     */
+        return result != null && result == 1;
+    }
     public void saveToCache(String key, Object value) {
         try {
-            String jsonValue = objectMapper.writeValueAsString(value); // 객체 -> JSON 문자열 변환
+            String jsonValue = objectMapper.writeValueAsString(value);
             redisTemplate.opsForValue()
                          .set(key, jsonValue);
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Redis 저장 오류: JSON 변환 실패", e);
         }
     }
-
-    /**
-     * TTL 설정 가능 (객체 -> JSON 변환)
-     */
     public void saveToCache(String key, Object value, long ttlInSeconds) {
         try {
-            String jsonValue = objectMapper.writeValueAsString(value); // 객체 -> JSON 변환
+            String jsonValue = objectMapper.writeValueAsString(value);
             redisTemplate.opsForValue()
                          .set(key, jsonValue, ttlInSeconds, TimeUnit.SECONDS);
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Redis 저장 오류: JSON 변환 실패", e);
         }
     }
-
-    /**
-     * 캐시에서 값 조회 (JSON 문자열 -> 객체 변환)
-     */
     public <T> T getFromCache(String key, Class<T> type) {
         String jsonValue = redisTemplate.opsForValue()
                                         .get(key);
         if (jsonValue == null) return null;
 
         try {
-            return objectMapper.readValue(jsonValue, type); // JSON 문자열 -> 객체 변환
+            return objectMapper.readValue(jsonValue, type);
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Redis 조회 오류: JSON 변환 실패", e);
         }
     }
-
-    /**
-     * Redis 캐시 삭제
-     */
     public void deleteFromCache(String key) {
         redisTemplate.delete(key);
     }
-
-    // Resilience4j Retry 적용 (자동 재시도 기능 추가)
     @Retry(name = "redis-lock-retry", fallbackMethod = "fallbackAcquireLock")
     public boolean acquireLockWithRetry(String lockKey, String requestId, long expireTimeMillis) {
         boolean locked = acquireLock(lockKey, requestId, expireTimeMillis);
@@ -118,26 +112,16 @@ public class RedisUtility {
         }
         return true;
     }
-
-    // Redis 락 획득 실패 시 실행할 Fallback 메서드
     public boolean fallbackAcquireLock(String lockKey, String requestId, long expireTimeMillis, Exception ex) {
         log.error("Redis Lock 획득 실패: {}, RequestID: {} - 예외 발생: {}", lockKey, requestId, ex.getMessage());
         return false;
     }
-
-
-    // 기존 락 획득 메서드 (Lua 기반 적용)
-    public boolean acquireLock(String key, String requestId, long expireTimeMillis) {
-        Long result = redisTemplate.execute(
-                new DefaultRedisScript<>(LOCK_SCRIPT, Long.class),
-                Collections.singletonList(key), requestId, String.valueOf(expireTimeMillis));
-
-        if (result != null && result == 1) {
-            log.info("Redis Lock 획득 성공 - Key: {}, RequestID: {}, ExpireTime: {}ms", key, requestId, expireTimeMillis);
-            return true;
-        } else {
-            log.warn("Redis Lock 획득 실패 - Key: {}, RequestID: {}", key, requestId);
-            return false;
-        }
+    public Long updateStockInRedis(String productId, int quantity) {
+        String stockKey = "product_stock:" + productId;
+        return redisTemplate.execute(stockUpdateScript, Collections.singletonList(stockKey), String.valueOf(quantity));
+    }
+    public Long rollbackStockInRedis(String productId, int quantity) {
+        String stockKey = "product_stock:" + productId;
+        return redisTemplate.execute(stockRollbackScript, Collections.singletonList(stockKey), String.valueOf(quantity));
     }
 }

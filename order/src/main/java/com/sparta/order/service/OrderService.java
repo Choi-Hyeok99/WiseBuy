@@ -49,15 +49,17 @@ public class OrderService {
         order.setTotalAmount(totalAmount);
         orderRepository.save(order);
 
-        //  Kafka 이벤트 발행 (주문 생성 메시지)
-        KafkaMessage<OrderDto> message = new KafkaMessage<>(
-                "ORDER_CREATED",
-                new OrderDto(order.getId(), userId, totalAmount)
-        );
+        // 5. Kafka 이벤트 발행 (각 상품별 개별 메시지)
+        for (OrderItem orderItem : order.getOrderItems()) {
+            KafkaMessage<OrderDto> message = new KafkaMessage<>(
+                    "ORDER_CREATED",
+                    new OrderDto(order.getId(), userId, totalAmount
+                    )
+            );
+            orderProducerService.sendMessage("order.create", message, String.valueOf(order.getId()));
+        }
 
-        orderProducerService.sendMessage("order.create", message, String.valueOf(order.getId()));
-
-        // 5. 응답 DTO 반환
+        // 6. 응답 DTO 반환
         return new OrderResponseDto(order);
     }
     @Transactional

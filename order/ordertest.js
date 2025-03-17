@@ -3,18 +3,18 @@ import { check, sleep } from 'k6';
 
 // 10개의 서로 다른 userId를 미리 정의
 const userIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-const productId = 25;  // 예제 상품 ID
+const productId = 32;  // 예제 상품 ID
 const address = "서울시 강남구";  // 예제 주소
 
 // JWT 토큰 (테스트용, 실제 테스트 시 동적으로 설정 가능)
-const jwtToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJndXIwNzA5QG5hdmVyLmNvbSIsImFkZHJlc3MiOiIxMjMgTWFpbiBTdHJlZXQiLCJpYXQiOjE3NDE2NjYzMTMsImV4cCI6MTc0MTc1MjcxM30.kbwKKwqcxnVWxN6Ga1tOt64DNrPemhqSES8r5-mKXDU';
+const jwtToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJndXIwNzA5QG5hdmVyLmNvbSIsImFkZHJlc3MiOiIxMjMgTWFpbiBTdHJlZXQiLCJpYXQiOjE3NDIxOTUzODQsImV4cCI6MTc0MjI4MTc4NH0.zizJtXxM8pVTIua71oK-P9L0x_dTcM5bMMV2fxmgw1g';
 
 // K6 부하 테스트 옵션 설정
 export let options = {
     scenarios: {
         unique_users: {
             executor: 'per-vu-iterations',
-            vus: 1000, // 300명의 사용자가 동시에 요청
+            vus: 1000, // 3000명의 사용자가 동시에 요청
             iterations: 1,
             maxDuration: '1m',
         },
@@ -39,7 +39,7 @@ function createOrderData(userId) {
 export default function () {
     let userId = userIds[Math.floor(Math.random() * userIds.length)];
 
-    // 1️⃣ 주문 생성 (Order Service)
+    // 주문 생성 (Order Service)
     let createOrderUrl = 'http://localhost:8000/order-service/orders';
     let orderData = createOrderData(userId);
     let createOrderResponse = http.post(createOrderUrl, JSON.stringify(orderData), {

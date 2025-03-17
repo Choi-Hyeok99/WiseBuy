@@ -32,30 +32,38 @@ spring:
       timeout: 10000
       lettuce:
         pool:
-          max-active: 100
-          max-idle: 50
-          min-idle: 10
-          max-wait: 10000
+          max-active: 200
+          max-idle: 100
+          min-idle: 20
+          max-wait: 5000
 
   kafka:
     listener:
-      type: batch #  배치 모드 활성화
-      batch-size: 20 #  10개씩 묶어서 처리
-      concurrency: 5 #  Kafka Consumer를 3개의 스레드로 병렬 처리하도록 설정 (기본값: 1)
+      type: batch
+      batch-size: 50
+      concurrency: 5
     consumer:
-      auto-offset-reset: earliest  # 메시지 손실 방지
+      auto-offset-reset: earliest
       group-id: product-service
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "*"
-        spring.json.value.default.type: com.sparta.common.dto.KafkaMessage
-        spring.json.value.default.type.mapping:
-          com.sparta.common.dto.KafkaMessage: com.sparta.product.dto.StockUpdateRequestDto
-        spring.json.add.type.headers: true
-        session.timeout.ms: 60000         # 예: 60초
-        heartbeat.interval.ms: 10000      # 예: 10초
-        auto.offset.reset: earliest       # 오프셋이 없을 경우 처음부터 읽기
+        spring.json.value.default.type: com.sparta.product.dto.StockUpdateRequestDto
+        session.timeout.ms: 60000
+        heartbeat.interval.ms: 10000
+        auto.offset.reset: earliest
+      max-poll-records: 100
+      fetch-min-size: 1048576
+      fetch-max-wait-ms: 1000
+    producer:
+      acks: all
+      retries: 3
+      batch-size: 16384
+      linger-ms: 10
+      buffer-memory: 33554432
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
 eureka:
   client:
@@ -99,7 +107,7 @@ resilience4j:
         max-attempts: 5    #  최대 재시도 횟수
         wait-duration: 100ms #  재시도 간격
         enable-exponential-backoff: true  # 점진적으로 재시도 간격 증가
-        exponential-backoff-multiplier: 2 #  점진적 증가 적용
+        exponential-backoff-multiplier: 1.5 #  점진적 증가 적용
         retry-exceptions:
           - java.lang.IllegalStateException
 
