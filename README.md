@@ -10,14 +10,22 @@
 
 --- 
 
+> **최근 개선 (2026.09)** — 오래 묵혀둔 프로젝트를 다시 열어 아래 항목을 정리했습니다. 자세한 내용은 [최근 개선 로그](#최근-개선-로그).
+> - 하드코딩돼 있던 JWT secret / 부하테스트 토큰 제거, Actuator 노출 범위 축소
+> - `.env.example` 추가 + 누락 서비스(payment) 보강 + Kafka 리스너 정리 → `docker-compose up` 한 번으로 전체 스택 기동
+> - 주석 처리돼 방치돼 있던 재고/동시성 로직 테스트 복원
+
+--- 
+
 ## 📖 목차
 1. [📅 프로젝트 기간](#프로젝트-기간)
 2. [⚙️ 기술 스택](#기술-스택)
 3. [🤖 주요 기능](#주요-기능)
 4. [✏️ 기술적 고민 및 해결](#기술적-고민-및-해결)
 5. [🐳 Docker 기반 실행 방법](#docker-기반-실행-방법)
-6. [📄 프로젝트 문서 및 설계 자료](#프로젝트-문서-및-설계-자료)
-7. [📖 프로젝트 Wiki](https://github.com/Choi-Hyeok99/haengye_project/wiki)
+6. [🔧 최근 개선 로그](#최근-개선-로그)
+7. [📄 프로젝트 문서 및 설계 자료](#프로젝트-문서-및-설계-자료)
+8. [📖 프로젝트 Wiki](https://github.com/Choi-Hyeok99/haengye_project/wiki)
 
 
 ## 📖 시스템 아키텍쳐
@@ -29,7 +37,8 @@
 <h2 id="프로젝트-기간">📅 프로젝트 기간</h2>
 
 - **프로젝트 시작일** : 2024.12.18
-- **프로젝트 종료일** : 2024.01.15 ( MVP )
+- **프로젝트 종료일** : 2025.01.15 ( MVP )
+- **개인 프로젝트** (기획 · 설계 · 개발 전부 단독 진행)
 
 ---
 <h2 id="기술-스택">⚙️ 기술 스택</h2>
@@ -41,7 +50,9 @@
 |             | Spring Data JPA   | 📦  | -        |
 |             | Spring Security   | 🛡  | -        |
 | **Database** | MySQL             | 🐬  | 8.0.36   |
-|             | Redis             | 🔥  | 7.4.1    |
+|             | Redis             | 🔥  | 7.x      |
+| **Messaging** | Apache Kafka     | 📨  | 3.x      |
+| **Resilience** | Resilience4j    | 🔁  | 2.1.0    |
 | **Server**  | Docker            | 🐳  | 20.10.x  |
 |             | Spring Cloud      | 📦  | 2024.0.0 |
 | **Version Control** | Git               | 🛠  | -        |
@@ -110,92 +121,72 @@
 | 1,000        | 367            | 1,307          | 약 **257%**    |
 | 10,000       | 370            | 3,247          | 약 **900%**    |
 
+> 측정 환경: 로컬 단일 머신, k6로 `주문 생성 → 결제` 왕복 요청을 부하 (`order/ordertest.js`).
+> **개선 전** = JPA 비관적 락 기반 재고 차감, 조회 캐시 없음.
+> **개선 후** = Redis에서 Lua 스크립트로 원자적 재고 차감 + 조회 Redis 캐싱 + Kafka로 DB 반영 비동기화.
+> 절대 TPS는 실행 머신에 좌우되므로 개선 전/후 **비율** 기준으로 봐주세요. 재고 소진 이후의 요청은 정상적으로 거절되며, 이 거절은 실패율에 포함하지 않습니다.
 
 ---
 
 <h2 id="docker-기반-실행-방법">🐳 Docker 기반 실행 방법</h2>
 
-1. Docker 설치 
- * [Docker 공식 홈페이지](https://www.docker.com/)에서 Docker Desktop 설치.
+전체 스택(MySQL · Redis · Kafka · Eureka · Gateway · 6개 도메인 서비스)이 `docker-compose.yml` 하나로 뜬다.
 
-
-### 2. 프로젝트 클론
-
+```bash
+# 1. 클론
 git clone https://github.com/Choi-Hyeok99/haengye_project.git
+cd haengye_project
 
-**Docker Compose 파일**
-* 프로젝트 루트 디렉토리에 'docker-compose.yml'이 있어야 합니다
-* 다음과 같이 작성해야합니다
+# 2. 환경변수 준비 — .env.example을 복사한 뒤 값을 채운다 (JWT_SECRET, DB 비밀번호 등)
+cp .env.example .env
+
+# 3. 빌드 + 기동
+docker-compose up --build
+
+# 4. 확인 — Gateway가 8000번, Eureka 대시보드가 8761번
+docker ps
+```
+
+- 각 서비스는 DB/Redis 컨테이너보다 먼저 떠서 접속에 실패할 수 있으나 `restart: on-failure`로 자동 재기동된다. 최초 기동은 전부 안정화될 때까지 1~2분 걸린다.
+- 서비스별 스키마(`user_schema`, `product_schema` …)는 JDBC 접속 시 `createDatabaseIfNotExist=true`로 자동 생성된다.
+- 정리: `docker-compose down` (볼륨까지: `docker-compose down -v`)
 
 <details>
-<summary>docker-compose.yml 보기</summary>
+<summary>포트 매핑</summary>
 
-```
-version: '3.8'
-
-services:
-microservices_db:
-image: mysql:8.0.36
-container_name: microservices_db
-ports:
-- "3310:3306"
-environment:
-MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-MYSQL_DATABASE: ${MYSQL_DATABASE}
-MYSQL_USER: ${MYSQL_USER}
-MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-volumes:
-- mysql_microservices_data:/var/lib/mysql
-networks:
-- my_network
-
-redis:
-image: redis:latest
-container_name: haengye_redis
-ports:
-- "6379:6379"
-volumes:
-- redis_data:/data
-healthcheck:
-test: [ "CMD", "redis-cli", "ping" ]
-interval: 10s
-timeout: 5s
-retries: 3
-networks:
-- my_network
-
-# 나머지도 동일하게 추가 
-```
+| 대상 | 포트 |
+| --- | --- |
+| API Gateway | 8000 |
+| Eureka | 8761 |
+| user / product / wishlist / order / payment | 8081 / 8082 / 8083 / 8084 / 8085 |
+| MySQL | 3310 → 3306 |
+| Redis | 6379 |
+| Kafka (호스트에서 접속 시) | 9092 |
 </details>
 
 
-<details>
-<summary>docker 명령어</summary>
+---
 
-```
-1. 컨테이너 실행
-- 애플리케이션 및 MySQL 컨테이너를 실행합니다.
-    docker-compose up --build
+<h2 id="최근-개선-로그">🔧 최근 개선 로그</h2>
 
-2.컨테이너 상태 확인
-- 실행 중인 컨테이너를 확인합니다.
-    docker ps
+### 2026.09 — 포트폴리오 재정비
 
-3. 컨테이너 로그 확인
-- 특정 컨테이너의 로그를 확인합니다.
-    docker logs <컨테이너 이름>
+1년 가까이 방치했던 프로젝트를 다시 열어, 배포 없이 로컬에서 `docker-compose up` 한 번으로 전체 스택이 뜨는 것을 목표로 정리했다.
 
-4. 컨테이너 정지 및 삭제 
-- 실행 중인 컨테이너를 정지하고 삭제합니다.
-    docker-compose down
+**보안**
+- 코드에 평문으로 박혀 있던 JWT secret(gateway / common)을 `${JWT_SECRET}` 환경변수로 분리하고 값을 재발급
+- k6 부하테스트 스크립트(`order/ordertest.js`)에 하드코딩돼 있던 실제 JWT 토큰·이메일을 `--env` 주입 방식으로 교체
+- product 서비스의 Actuator 노출 범위를 `*` → `health, info`로 축소
 
-5.Docker 이미지 및 컨테이너 정리
-- 사용하지 않는 Docker 이미지 및 컨테이너를 정리합니다.
-    docker system prune -a
+**실행 환경**
+- `.env.example` 추가 — 필요한 환경변수 목록과 채우는 방법을 문서화
+- `docker-compose.yml`의 환경변수 이름을 각 서비스 `application.yml`이 실제로 참조하는 이름과 일치시킴 (이전엔 이름이 어긋나 주입이 안 되고 있었음)
+- `docker-compose.yml`에서 통째로 빠져 있던 payment 서비스 컨테이너 추가
+- Kafka 리스너를 컨테이너 내부용(`kafka:29092`)과 호스트용(`localhost:9092`)으로 분리 — 단일 리스너로는 컨테이너 안의 서비스가 브로커에 다시 붙지 못하던 문제 해결
+- 각 `application.yml`에 로컬 기본값(`${REDIS_HOST:localhost}` 등)을 넣어, 도커 없이 실행할 때도 동작하도록 함
 
-```
-</details>
-
+**테스트**
+- 전체가 주석 처리된 채 방치돼 있던 `ProductServiceTest`를, 그 사이 바뀐 재고 처리 구조(Redis Lua 원자적 차감 + Kafka 비동기 DB 반영)에 맞게 재작성 — 재고 선점 / DB 확정 / 재고 음수 방지 등 14개 케이스, 인프라 없이 도는 순수 단위 테스트
 
 ---
 
