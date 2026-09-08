@@ -43,3 +43,16 @@ k6 run load-test/order-flow.js
 - 로컬 단일 머신, 부하생성기(k6)와 앱 스택이 **같은 호스트**에 있음 → 절대 수치는 이 환경 한정.
 - 컨테이너 11개 + k6가 같은 CPU를 나눠 쓰므로, 리소스 경합이 병목으로 나올 수 있음.
 - 다른 프로그램은 닫고 측정할 것.
+
+## 재고 원자성 검증 (`lua-concurrency-check.sh`)
+
+`docker compose up -d redis` 후 실행. RedisUtility의 재고 차감 Lua 스크립트를 redis-cli로
+동시에 800번 실행해 오버셀(재고 음수)이 없는지 확인한다. gradle/JVM 불필요.
+
+```
+$ bash load-test/lua-concurrency-check.sh
+재고 100, 동시 요청 800건 → 성공 100 / 거절 700 / 최종 재고 0
+== PASS: 오버셀 없음 ==
+```
+
+같은 검증의 JUnit 버전은 `product/.../ProductStockConcurrencyTest.java` (localhost:6379 Redis 필요).
