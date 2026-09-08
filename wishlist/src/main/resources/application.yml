@@ -46,7 +46,7 @@ eureka:
   client:
     register-with-eureka: true
     fetch-registry: true
-    registry-fetch-interval-seconds: 600 # 5??? ??
+    registry-fetch-interval-seconds: 30  # 로컬에서 서비스 재기동 시 다른 서비스가 빨리 인지하도록 짧게 (원래 600이라 재시작이 10분간 반영 안 됐음)
     disable-delta: true
     # 로컬 실행/도커 실행에 따라 Eureka 서버 주소가 다르므로(127.0.0.1 vs eureka-server 컨테이너),
     # EUREKA_URL 환경변수가 있으면 그 값을, 없으면 콜론 뒤 기본값(로컬 주소)을 쓰도록 분기한다.
