@@ -46,8 +46,9 @@ spring:
     # docker-compose가 kafka:29092(컨테이너 간 통신 전용 리스너)를 넣어준다.
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     listener:
-      type: batch
-      batch-size: 50
+      # 기본 리스너는 단건(record) 모드. 배치가 필요한 order.create 컨슈머만 KafkaConfig의
+      # batchFactory(setBatchListener(true))를 명시적으로 쓴다. 예전엔 여기 type: batch가 전역이라
+      # 단건 시그니처 컨슈머(stock.rollback 등)와 어긋날 소지가 있었다.
       concurrency: 5
     consumer:
       auto-offset-reset: earliest

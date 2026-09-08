@@ -55,7 +55,9 @@ public class ProductController {
             productService.updateStockWithDistributedLock(productId, stockUpdateRequestDto.getQuantity());
             return ResponseEntity.ok().build();
         } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body("다른 요청이 재고를 수정 중입니다. 잠시 후 다시 시도해주세요.");
+            // 재고 부족 등 "지금 처리할 수 없음" → 409. 실제 사유를 그대로 전달한다
+            // (예전엔 "다른 요청이 재고를 수정 중입니다"로 고정돼 있어 재고 부족과 구분이 안 됐음).
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         } catch (Exception e) {

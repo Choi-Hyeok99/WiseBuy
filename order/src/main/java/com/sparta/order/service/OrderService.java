@@ -20,7 +20,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -49,14 +51,15 @@ public class OrderService {
         order.setTotalAmount(totalAmount);
         orderRepository.save(order);
 
-        // 5. Kafka 이벤트 발행 (각 상품별 개별 메시지)
+        // 5. order.create 이벤트 발행 (상품별 1건).
+        //    재고 예약(Redis)은 위 processOrderItems에서 이미 끝났고, 이 이벤트는 product 쪽 배치 컨슈머가
+        //    묶어서 DB에 반영하는 데 쓴다. 그래서 orderId만이 아니라 productId/quantity를 실어 보낸다.
+        //    파티션 키를 productId로 두어 같은 상품 이벤트가 한 파티션에 모이도록(순서/배치 효율) 한다.
         for (OrderItem orderItem : order.getOrderItems()) {
-            KafkaMessage<OrderDto> message = new KafkaMessage<>(
-                    "ORDER_CREATED",
-                    new OrderDto(order.getId(), userId, totalAmount
-                    )
-            );
-            orderProducerService.sendMessage("order.create", message, String.valueOf(order.getId()));
+            orderProducerService.sendMessage(
+                    "order.create",
+                    new KafkaMessage<>("ORDER_CREATED", stockEventPayload(order.getId(), orderItem.getProductId(), orderItem.getQuantity())),
+                    String.valueOf(orderItem.getProductId()));
         }
 
         // 6. 응답 DTO 반환
@@ -131,8 +134,15 @@ public class OrderService {
                 throw new IllegalArgumentException("상품을 찾을 수 없습니다. 상품 ID: " + item.getProductId());
             }
 
-            // 상품 재고 복구 (취소된 주문의 수량만큼 재고를 증가)
-            productClient.updateStock(item.getProductId(), new StockUpdateRequestDto(item.getQuantity()));
+            // 재고 복구: Redis는 즉시(sync), DB는 order.create 배치 컨슈머로.
+            // quantity 규약이 "차감할 수량(양수)"이므로 복구는 음수를 보낸다
+            // (product Lua는 DECRBY라 DECRBY -n = +n; 배치 컨슈머도 stock - (-n) = +n).
+            // 예전엔 여기서 양수를 보내 취소할수록 재고가 더 줄었다.
+            productClient.updateStock(item.getProductId(), new StockUpdateRequestDto(-item.getQuantity()));
+            orderProducerService.sendMessage(
+                    "order.create",
+                    new KafkaMessage<>("ORDER_CANCELLED", stockEventPayload(order.getId(), item.getProductId(), -item.getQuantity())),
+                    String.valueOf(item.getProductId()));
         }
 
         // 변경된 주문 저장
@@ -200,6 +210,16 @@ public class OrderService {
         return wishlistItems;
     }
 
+    // order.create 이벤트 payload. product 배치 컨슈머가 productId/quantity를 읽어 DB 재고를 반영한다.
+    // quantity: 양수 = 차감(주문), 음수 = 복구(취소).
+    private Map<String, Object> stockEventPayload(Long orderId, Long productId, int quantity) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("orderId", orderId);
+        data.put("productId", productId);
+        data.put("quantity", quantity);
+        return data;
+    }
+
     private Order createNewOrder(Long userId, String address) {
         Order order = new Order();
         order.setUserId(userId);
@@ -234,7 +254,11 @@ public class OrderService {
             totalAmount += orderItem.getPrice() * orderItem.getQuantity();
 
             // 5. 재고 차감 요청
-            productClient.updateStock(product.getId(), new StockUpdateRequestDto(-item.getQuantity()));
+            // updateStock의 quantity 규약은 "차감할 수량(양수)"이다. product 쪽 Lua가 DECRBY로 그만큼 빼고,
+            // stock.update 컨슈머도 (stock - quantity)로 계산한다. 예전엔 여기서 -item.getQuantity()(음수)를
+            // 보내서 DECRBY -n = +n 이 되어 주문할수록 재고가 오히려 늘어나고, 재고 부족 체크(stock < -n)도
+            // 항상 통과하는 버그가 있었다. 양수로 바로잡음.
+            productClient.updateStock(product.getId(), new StockUpdateRequestDto(item.getQuantity()));
         }
 
         return totalAmount;

@@ -3,7 +3,6 @@ package com.sparta.product.service;
 import com.sparta.product.dto.ProductDetailResponseDto;
 import com.sparta.product.dto.ProductRequestDto;
 import com.sparta.product.dto.ProductResponseDto;
-import com.sparta.product.dto.StockUpdateRequestDto;
 import com.sparta.product.entitiy.Product;
 import com.sparta.product.entitiy.ProductInfo;
 import com.sparta.product.entitiy.ProductStatus;
@@ -23,18 +22,13 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.support.SendResult;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -47,8 +41,8 @@ import static org.mockito.Mockito.when;
  * (인프라까지 함께 띄우는 테스트는 @SpringBootTest 쪽에서 따로 다룬다.)
  *
  * 선착순 재고 처리는 두 단계로 나눠져 있고, 테스트도 그 경계를 따라간다.
- *  1) updateStockWithDistributedLock : Redis(Lua)에서 원자적으로 재고를 선점하고, 성공하면 Kafka 이벤트만 던진다.
- *  2) executeStockUpdate            : Kafka 컨슈머가 받아서 실제 DB 재고를 깎는다. 최종 정합성은 여기서 지켜진다.
+ *  1) updateStockWithDistributedLock : Redis(Lua)에서 원자적으로 재고를 예약한다. 오버셀을 막는 관문.
+ *  2) executeStockUpdate            : order.create 배치 컨슈머가 상품별 합산 수량으로 호출해 DB 재고를 맞춘다.
  */
 @ExtendWith(MockitoExtension.class)
 class ProductServiceTest {
@@ -61,9 +55,6 @@ class ProductServiceTest {
 
     @Mock
     private RedisUtility redisUtility;
-
-    @Mock
-    private KafkaTemplate<String, StockUpdateRequestDto> kafkaTemplate;
 
     @Mock
     private HttpServletRequest request;
@@ -211,62 +202,47 @@ class ProductServiceTest {
 
 
     @Nested
-    @DisplayName("재고 선점 - updateStockWithDistributedLock")
+    @DisplayName("재고 예약 - updateStockWithDistributedLock")
     class ReserveStock {
 
-        // Kafka send() 는 CompletableFuture 를 돌려주고, 서비스가 거기에 whenComplete 콜백을 건다.
-        // null 을 넣으면 콜백에서 NPE 가 나므로 이미 완료된 빈 Future 를 물려준다.
-        private void stubKafkaOk() {
-            CompletableFuture<SendResult<String, StockUpdateRequestDto>> done =
-                    CompletableFuture.completedFuture(null);
-            when(kafkaTemplate.send(eq("stock.update"), any(StockUpdateRequestDto.class))).thenReturn(done);
-        }
-
         @Test
-        @DisplayName("Redis 선점에 성공하면 DB 반영용 Kafka 이벤트를 발행한다")
-        void publishesEventOnSuccess() {
-            // Lua 스크립트가 "남은 재고"를 양수로 돌려주면 선점 성공.
+        @DisplayName("Lua 가 남은 재고를 양수로 돌려주면 예약 성공, 예외 없음")
+        void reservesSuccessfully() {
             when(redisUtility.updateStockInRedis("1", 5)).thenReturn(45L);
-            stubKafkaOk();
 
             productService.updateStockWithDistributedLock(1L, 5);
 
-            verify(kafkaTemplate).send(eq("stock.update"), any(StockUpdateRequestDto.class));
+            verify(redisUtility).updateStockInRedis("1", 5);
         }
 
         @Test
-        @DisplayName("상품 키가 Redis 에 없으면(-1) NotFoundException, 이벤트 발행 안 함")
+        @DisplayName("상품 키가 Redis 에 없으면(-1) NotFoundException")
         void productMissing() {
             when(redisUtility.updateStockInRedis("1", 5)).thenReturn(-1L);
 
             assertThatThrownBy(() -> productService.updateStockWithDistributedLock(1L, 5))
                     .isInstanceOf(NotFoundException.class);
-
-            verifyNoInteractions(kafkaTemplate);
         }
 
         @Test
-        @DisplayName("남은 재고보다 많이 요청하면(-2) IllegalStateException, 이벤트 발행 안 함")
+        @DisplayName("남은 재고보다 많이 요청하면(-2) IllegalStateException")
         void outOfStock() {
-            // 재고 부족은 Lua 안에서 이미 판정된다. 여기서 -2 를 받으면 Redis 값은 그대로(차감 안 됨)이고
-            // 주문도 진행되면 안 되므로 Kafka 로 넘어가지 않아야 한다.
+            // 재고 부족 판정은 Lua 안에서 원자적으로 끝난다. -2 면 Redis 값은 그대로고 주문도 진행되면 안 된다.
             when(redisUtility.updateStockInRedis("1", 100)).thenReturn(-2L);
 
             assertThatThrownBy(() -> productService.updateStockWithDistributedLock(1L, 100))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("재고 부족");
-
-            verifyNoInteractions(kafkaTemplate);
         }
     }
 
 
     @Nested
-    @DisplayName("DB 재고 확정 - executeStockUpdate")
+    @DisplayName("DB 재고 반영 - executeStockUpdate")
     class ExecuteStockUpdate {
 
         @Test
-        @DisplayName("정상 수량이면 DB 재고를 깎고 캐시를 갱신한다")
+        @DisplayName("양수 수량이면 그만큼 DB 재고를 깎고 캐시를 갱신한다")
         void decrements() {
             Product p = product(1L, "상품A", 50);
             when(productRepository.findById(1L)).thenReturn(Optional.of(p));
@@ -279,19 +255,29 @@ class ProductServiceTest {
         }
 
         @Test
-        @DisplayName("남은 재고를 초과하면 재고를 음수로 만들지 않고 IllegalStateException")
-        void neverGoesNegative() {
-            // 동시성 테스트의 핵심 케이스. Redis 선점을 통과한 이벤트가 어떤 이유로든 재고를 초과하면
-            // (이벤트 중복, 순서 꼬임 등) DB 단계에서 마지막으로 막아야 한다.
+        @DisplayName("음수 수량이면(취소/롤백) 그만큼 DB 재고를 되돌린다")
+        void restores() {
+            Product p = product(1L, "상품A", 40);
+            when(productRepository.findById(1L)).thenReturn(Optional.of(p));
+
+            productService.executeStockUpdate(1L, -10);
+
+            assertThat(p.getStock()).isEqualTo(50);
+            verify(redisUtility).saveToCache("product_stock:1", 50);
+        }
+
+        @Test
+        @DisplayName("DB 기준으로 음수가 되려 하면 0으로 클램프한다 (Redis-DB가 이미 어긋난 상황)")
+        void clampsInsteadOfGoingNegative() {
+            // 배치 컨슈머에서 호출되므로 예외를 던지면 배치 전체가 재시도 루프에 빠진다.
+            // Redis 관문을 이미 통과한 상태라 여기서는 음수만 막고 로그로 남긴다.
             Product p = product(1L, "상품A", 5);
             when(productRepository.findById(1L)).thenReturn(Optional.of(p));
 
-            assertThatThrownBy(() -> productService.executeStockUpdate(1L, 10))
-                    .isInstanceOf(IllegalStateException.class);
+            productService.executeStockUpdate(1L, 10);
 
-            assertThat(p.getStock()).isEqualTo(5); // 그대로
-            verify(productRepository, never()).save(any(Product.class));
-            verify(redisUtility, never()).saveToCache(any(), any());
+            assertThat(p.getStock()).isEqualTo(0);
+            verify(redisUtility).saveToCache("product_stock:1", 0);
         }
 
         @Test

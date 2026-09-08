@@ -3,7 +3,6 @@ package com.sparta.product.service;
 import com.sparta.product.dto.ProductDetailResponseDto;
 import com.sparta.product.dto.ProductRequestDto;
 import com.sparta.product.dto.ProductResponseDto;
-import com.sparta.product.dto.StockUpdateRequestDto;
 import com.sparta.product.entitiy.Product;
 import com.sparta.product.entitiy.ProductStatus;
 import com.sparta.product.entitiy.ProductType;
@@ -11,7 +10,6 @@ import com.sparta.product.exception.NotFoundException;
 import com.sparta.product.exception.UnauthorizedException;
 import com.sparta.product.redis.RedisUtility;
 import com.sparta.product.repository.ProductRepository;
-import io.github.resilience4j.retry.annotation.Retry;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,13 +17,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
 
 @Service
@@ -36,8 +30,6 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final RedisUtility redisUtility; // Redis 유틸리티 추가
     private static final String STOCK_KEY_PREFIX = "product_stock:";
-    private final KafkaTemplate kafkaTemplate;
-    private static final int LOCK_TIMEOUT = 1000; // 밀리초 단위
 
 
     public ProductResponseDto createProduct(ProductRequestDto requestDto, HttpServletRequest request) {
@@ -119,51 +111,55 @@ public class ProductService {
         return stock;
     }
 
+    /**
+     * 재고 "예약" (동기). Redis에서 Lua 스크립트로 원자적으로 재고를 차감한다.
+     * 선착순 판매에서 오버셀을 막는 진짜 관문이 여기다. 여러 요청이 동시에 들어와도
+     * get→비교→차감이 Redis 단일 스레드로 한 덩어리로 실행되므로 race condition이 없다.
+     *
+     * quantity 규약: 양수 = 차감(주문), 음수 = 복구(주문 취소). Lua는 DECRBY이므로
+     * DECRBY key -n = +n 으로 복구도 자연스럽게 처리된다.
+     *
+     * DB 반영은 여기서 하지 않는다. 주문 서비스가 발행하는 order.create 이벤트를
+     * product 쪽 배치 컨슈머(ProductConsumerService.consumeOrderEvents)가 묶어서 처리한다.
+     * (예전엔 이 메서드가 stock.update 이벤트를 따로 또 발행했는데, 그 컨슈머가 배치/단건
+     *  설정 불일치로 실제로 동작하지 않아 Redis와 DB가 어긋나고 있었다. 경로를 하나로 정리함.)
+     *
+     * @Retry는 뗐다. 예전엔 이 메서드에 @Retry(retry-exceptions=IllegalStateException, fallback=로그만)이
+     * 붙어 있어서, "재고 부족"(IllegalStateException)이 5번 재시도된 뒤 fallback에서 삼켜져
+     * 예외가 주문 흐름으로 전달되지 않았다(= 재고 부족인데 주문이 통과). Lua 연산은 이미 원자적이라
+     * 재시도할 것도 없으므로, 부족/없음은 그대로 던져 주문이 실패하게 둔다.
+     */
     @Transactional
-    @Retry(name = "redis-lock-retry", fallbackMethod = "fallbackLockFailure")
     public void updateStockWithDistributedLock(Long productId, int quantity) {
-        String requestId = UUID.randomUUID().toString();
-
-        Long updatedStock = redisUtility.updateStockInRedis(String.valueOf(productId), quantity);
-        if (updatedStock == -1) {
+        Long remaining = redisUtility.updateStockInRedis(String.valueOf(productId), quantity);
+        if (remaining == -1) {
             throw new NotFoundException("상품이 존재하지 않습니다.");
         }
-        if (updatedStock == -2) {
+        if (remaining == -2) {
             throw new IllegalStateException("재고 부족으로 주문이 취소되었습니다.");
         }
-
-        // Kafka 이벤트 발행 (비동기 DB 업데이트)
-        StockUpdateRequestDto stockUpdateEvent = new StockUpdateRequestDto(productId, quantity);
-
-        CompletableFuture<SendResult<String, StockUpdateRequestDto>> future =
-                kafkaTemplate.send("stock.update", stockUpdateEvent);
-
-        future.whenComplete((result, ex) -> {
-            if (ex == null) {
-                log.info("Kafka 메시지 전송 성공: {}", stockUpdateEvent);
-            } else {
-                log.error("Kafka 메시지 전송 실패: {}", ex.getMessage());
-            }
-        });
     }
 
-    @Transactional  //  트랜잭션은 여기만 적용해야 함
+    /**
+     * order.create 배치 컨슈머가 호출하는 DB 재고 반영. 상품별로 합산된 수량(양수=차감, 음수=복구)을 받는다.
+     * Redis(예약)는 이미 반영된 상태이고, 여기서 DB와 캐시를 그 결과에 맞춘다.
+     */
+    @Transactional
     public void executeStockUpdate(Long productId, int quantity) {
         Product product = productRepository.findById(productId)
                                            .orElseThrow(() -> new NotFoundException("상품이 존재하지 않습니다."));
 
         int updatedStock = product.getStock() - quantity;
         if (updatedStock < 0) {
-            throw new IllegalStateException("재고 부족으로 주문이 취소되었습니다.");
+            // Redis 관문을 통과했는데 DB 기준으로 음수라면 Redis-DB가 이미 어긋난 상황. 로그만 남기고 0으로 막는다.
+            log.warn("DB 재고가 음수가 되려 함 - 상품 ID: {}, 현재: {}, 반영 시도: {}. 0으로 클램프.",
+                    productId, product.getStock(), quantity);
+            updatedStock = 0;
         }
 
         product.setStock(updatedStock);
         productRepository.save(product);
 
         redisUtility.saveToCache(STOCK_KEY_PREFIX + productId, updatedStock);
-    }
-    // Fallback 메서드 - 락 획득 실패 시 실행
-    private void fallbackLockFailure(Long productId, int quantity, Throwable t) {
-        log.error("재고 업데이트 실패 (상품 ID: {}, 수량: {}) 예외: {}", productId, quantity, t.getMessage());
     }
 }
