@@ -41,7 +41,7 @@ import static org.mockito.Mockito.when;
  * (인프라까지 함께 띄우는 테스트는 @SpringBootTest 쪽에서 따로 다룬다.)
  *
  * 선착순 재고 처리는 두 단계로 나눠져 있고, 테스트도 그 경계를 따라간다.
- *  1) updateStockWithDistributedLock : Redis(Lua)에서 원자적으로 재고를 예약한다. 오버셀을 막는 관문.
+ *  1) reserveStock : Redis(Lua)에서 원자적으로 재고를 예약한다. 오버셀을 막는 관문.
  *  2) executeStockUpdate            : order.create 배치 컨슈머가 상품별 합산 수량으로 호출해 DB 재고를 맞춘다.
  */
 @ExtendWith(MockitoExtension.class)
@@ -202,7 +202,7 @@ class ProductServiceTest {
 
 
     @Nested
-    @DisplayName("재고 예약 - updateStockWithDistributedLock")
+    @DisplayName("재고 예약 - reserveStock")
     class ReserveStock {
 
         @Test
@@ -210,7 +210,7 @@ class ProductServiceTest {
         void reservesSuccessfully() {
             when(redisUtility.updateStockInRedis("1", 5)).thenReturn(45L);
 
-            productService.updateStockWithDistributedLock(1L, 5);
+            productService.reserveStock(1L, 5);
 
             verify(redisUtility).updateStockInRedis("1", 5);
         }
@@ -220,7 +220,7 @@ class ProductServiceTest {
         void productMissing() {
             when(redisUtility.updateStockInRedis("1", 5)).thenReturn(-1L);
 
-            assertThatThrownBy(() -> productService.updateStockWithDistributedLock(1L, 5))
+            assertThatThrownBy(() -> productService.reserveStock(1L, 5))
                     .isInstanceOf(NotFoundException.class);
         }
 
@@ -230,7 +230,7 @@ class ProductServiceTest {
             // 재고 부족 판정은 Lua 안에서 원자적으로 끝난다. -2 면 Redis 값은 그대로고 주문도 진행되면 안 된다.
             when(redisUtility.updateStockInRedis("1", 100)).thenReturn(-2L);
 
-            assertThatThrownBy(() -> productService.updateStockWithDistributedLock(1L, 100))
+            assertThatThrownBy(() -> productService.reserveStock(1L, 100))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("재고 부족");
         }

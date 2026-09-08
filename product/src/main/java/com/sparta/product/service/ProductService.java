@@ -112,25 +112,16 @@ public class ProductService {
     }
 
     /**
-     * 재고 "예약" (동기). Redis에서 Lua 스크립트로 원자적으로 재고를 차감한다.
-     * 선착순 판매에서 오버셀을 막는 진짜 관문이 여기다. 여러 요청이 동시에 들어와도
-     * get→비교→차감이 Redis 단일 스레드로 한 덩어리로 실행되므로 race condition이 없다.
+     * 재고 예약 (동기). Redis Lua로 "조회 → 부족 판정 → 차감"을 원자적으로 실행한다.
+     * 선착순 판매에서 오버셀을 막는 관문. 동시 요청이 몰려도 Redis가 Lua를 단일 스레드로
+     * 통째 실행하므로 race condition이 없다.
      *
-     * quantity 규약: 양수 = 차감(주문), 음수 = 복구(주문 취소). Lua는 DECRBY이므로
-     * DECRBY key -n = +n 으로 복구도 자연스럽게 처리된다.
-     *
-     * DB 반영은 여기서 하지 않는다. 주문 서비스가 발행하는 order.create 이벤트를
-     * product 쪽 배치 컨슈머(ProductConsumerService.consumeOrderEvents)가 묶어서 처리한다.
-     * (예전엔 이 메서드가 stock.update 이벤트를 따로 또 발행했는데, 그 컨슈머가 배치/단건
-     *  설정 불일치로 실제로 동작하지 않아 Redis와 DB가 어긋나고 있었다. 경로를 하나로 정리함.)
-     *
-     * @Retry는 뗐다. 예전엔 이 메서드에 @Retry(retry-exceptions=IllegalStateException, fallback=로그만)이
-     * 붙어 있어서, "재고 부족"(IllegalStateException)이 5번 재시도된 뒤 fallback에서 삼켜져
-     * 예외가 주문 흐름으로 전달되지 않았다(= 재고 부족인데 주문이 통과). Lua 연산은 이미 원자적이라
-     * 재시도할 것도 없으므로, 부족/없음은 그대로 던져 주문이 실패하게 둔다.
+     * quantity 규약: 양수 = 차감(주문), 음수 = 복구(취소). DB 반영은 여기서 하지 않고
+     * order.create 이벤트를 받은 배치 컨슈머(ProductConsumerService)가 처리한다.
+     * 재고 부족/상품 없음은 예외를 그대로 던져 주문이 실패하게 둔다(재시도 의미 없음).
      */
     @Transactional
-    public void updateStockWithDistributedLock(Long productId, int quantity) {
+    public void reserveStock(Long productId, int quantity) {
         Long remaining = redisUtility.updateStockInRedis(String.valueOf(productId), quantity);
         if (remaining == -1) {
             throw new NotFoundException("상품이 존재하지 않습니다.");

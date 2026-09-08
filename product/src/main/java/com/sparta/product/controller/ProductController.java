@@ -52,7 +52,7 @@ public class ProductController {
     @PutMapping("/{productId}/stock")
     public ResponseEntity<String> updateStock(@PathVariable Long productId, @RequestBody StockUpdateRequestDto stockUpdateRequestDto) {
         try {
-            productService.updateStockWithDistributedLock(productId, stockUpdateRequestDto.getQuantity());
+            productService.reserveStock(productId, stockUpdateRequestDto.getQuantity());
             return ResponseEntity.ok().build();
         } catch (IllegalStateException e) {
             // 재고 부족 등 "지금 처리할 수 없음" → 409. 실제 사유를 그대로 전달한다

@@ -6,10 +6,10 @@ import com.sparta.user.security.UserDetailsServiceImpl;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -47,29 +47,15 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http.csrf().disable()
-            .authorizeRequests()
-            .requestMatchers("/user/send-email", "/user/signup","/user/login").permitAll()
-            // 컨트롤러에서 예외가 터지면 Spring Boot가 내부적으로 /error로 다시 요청을 보내서 에러 응답을 만드는데,
-            // /error가 permitAll이 아니면 이 내부 요청마저 "인증 안 됨"으로 막혀서 진짜 에러(예: 500)가
-            // 403 "Access Denied"로 둔갑해버린다. 그래서 /error는 항상 permitAll이어야 한다.
-            .requestMatchers("/error").permitAll()
-            // Swagger UI 리소스와 API 명세(JSON)는 문서 열람용이라 인증 없이 볼 수 있어야 한다.
-            .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
-            .requestMatchers(HttpMethod.GET, "/products/**").permitAll()
-            .requestMatchers(HttpMethod.POST, "/products/**").permitAll()
-            .requestMatchers(HttpMethod.GET, "/wishlist/**").authenticated() // GET 요청에 대한 인증 필요 추가
-            .requestMatchers(HttpMethod.POST, "/wishlist/**").authenticated()
-            .requestMatchers(HttpMethod.PUT, "/wishlist/**").authenticated()
-            .requestMatchers(HttpMethod.DELETE, "/wishlist/**").authenticated()
-            .requestMatchers(HttpMethod.POST,"/orders/**").authenticated()
-            .requestMatchers(HttpMethod.GET,"/orders/**").authenticated()
-            .requestMatchers(HttpMethod.DELETE,"/orders/**").authenticated()
-            .requestMatchers(HttpMethod.PATCH,"/orders/**").authenticated()
-
-
-            .anyRequest().authenticated()
-            .and()
+        // 이 서비스는 /user/** 만 서빙한다. (products/orders/wishlist 매처는 모놀리스 시절 잔재라 제거)
+        http.csrf(AbstractHttpConfigurer::disable)
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/user/send-email", "/user/signup", "/user/login").permitAll()
+                // 컨트롤러에서 예외가 터지면 Spring Boot가 내부적으로 /error로 다시 요청을 보낸다.
+                // /error가 permitAll이 아니면 그 내부 요청까지 막혀서 진짜 에러(500)가 403으로 둔갑한다.
+                .requestMatchers("/error").permitAll()
+                .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+                .anyRequest().authenticated())
             .addFilterBefore(new JwtAuthorizationFilter(jwtUtil, userDetailsService), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

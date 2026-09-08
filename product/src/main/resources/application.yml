@@ -116,17 +116,6 @@ server:
         await-termination: true
         await-termination-period: 30s
 
-resilience4j:
-  retry:
-    instances:
-      redis-lock-retry:
-        max-attempts: 5    #  최대 재시도 횟수
-        wait-duration: 100ms #  재시도 간격
-        enable-exponential-backoff: true  # 점진적으로 재시도 간격 증가
-        exponential-backoff-multiplier: 1.5 #  점진적 증가 적용
-        retry-exceptions:
-          - java.lang.IllegalStateException
-
 management:
   endpoints:
     web:
@@ -134,8 +123,3 @@ management:
         # "*"로 열어두면 /actuator/env, /actuator/beans 등 내부 설정·빈 정보까지 전부 외부에 노출된다.
         # gateway-service와 동일하게 헬스체크/기본 정보만 노출하도록 제한한다.
         include: health, info
-  endpoint:
-    retries:
-      enabled: true
-    resilience4j:
-      enabled: true
