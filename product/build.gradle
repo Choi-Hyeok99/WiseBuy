@@ -47,10 +47,10 @@ dependencies {
 	implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
 	implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
 
-	// Redis 관련
-	implementation 'org.springframework.data:spring-data-redis'
-
-	implementation 'org.redisson:redisson-spring-boot-starter:3.21.1'
+	// Redis (StringRedisTemplate + Lua: 재고 캐시 / 원자적 증감 / 분산 락)
+	// 예전엔 redisson-spring-boot-starter가 이 스타터를 전이 의존성으로 끌어와서 동작했는데,
+	// RLock 등 Redisson 실사용처가 하나도 없어 스타터를 제거하고 필요한 것만 직접 선언한다.
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.1.0'
