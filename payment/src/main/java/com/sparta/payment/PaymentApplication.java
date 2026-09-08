@@ -1,6 +1,5 @@
 package com.sparta.payment;
 
-import io.github.cdimascio.dotenv.Dotenv;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
@@ -10,15 +9,10 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 public class PaymentApplication {
 
     public static void main(String[] args) {
-        // .env 파일 경로 명시
-        Dotenv dotenv = Dotenv.configure()
-                              .directory("/Users/hyeokchoi/sparta/haengye_project/haengye_project/payment/src/main/resources") // .env 파일 경로
-                              .filename(".env")                 // .env 파일 이름
-                              .load();
-
-        // 환경 변수 값을 시스템 속성으로 설정
-        dotenv.entries().forEach(entry -> System.setProperty(entry.getKey(), entry.getValue()));
-
+        // 예전엔 dotenv 라이브러리로 .env를 직접 읽어 시스템 프로퍼티에 넣었지만,
+        // 이 컴퓨터에만 있는 절대경로(/Users/hyeokchoi/...)라 다른 환경(도커 컨테이너 등)에서는 무조건 실패했다.
+        // Spring Boot는 OS 환경변수를 application.yml의 ${DB_URL} 같은 플레이스홀더에 자동으로 바인딩해주므로,
+        // 값 주입은 docker-compose(또는 로컬 셸의 export)가 맡고 이 코드는 Spring 부트스트랩만 담당한다.
         SpringApplication.run(PaymentApplication.class, args);
     }
 

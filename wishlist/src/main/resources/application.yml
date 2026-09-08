@@ -21,16 +21,18 @@ spring:
 
   data:
     redis:
-      host: ${REDIS_HOST}
-      port: ${REDIS_PORT}
+      # REDIS_HOST가 없으면(로컬에서 그냥 실행) localhost를 쓰고,
+      # 도커에서 실행하면 docker-compose가 REDIS_HOST=redis(컨테이너 이름)를 넣어준다.
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
       timeout: 10000
       lettuce:
         pool:
           max-active: 10
           max-idle: 5
           min-idle: 1
-          max-wait:
-            10000   host:
+          # 여기 max-wait 값이 "10000   host:"처럼 깨져 있던 걸 복구함 (YAML 파싱/Duration 변환 실패 원인)
+          max-wait: 10000
 
   feign:
     client:
@@ -46,9 +48,10 @@ eureka:
     fetch-registry: true
     registry-fetch-interval-seconds: 600 # 5??? ??
     disable-delta: true
+    # 로컬 실행/도커 실행에 따라 Eureka 서버 주소가 다르므로(127.0.0.1 vs eureka-server 컨테이너),
+    # EUREKA_URL 환경변수가 있으면 그 값을, 없으면 콜론 뒤 기본값(로컬 주소)을 쓰도록 분기한다.
     service-url:
-      defaultZone: http://127.0.0.1:8761/eureka
-#      defaultZone: http://eureka-server:8761/eureka ( 도커 환경 )
+      defaultZone: ${EUREKA_URL:http://127.0.0.1:8761/eureka}
 
   instance:
     lease-renewal-interval-in-seconds: 10
@@ -59,9 +62,10 @@ eureka:
     metadata-map:
       instanceId: wishlist-service:${random.value}
 
-  jwt:
-    secret: ${JWT_SECRET}
-    expiration: 3600000
+# jwt는 eureka 하위가 아니라 최상위 키여야 한다 (들여쓰기 실수로 eureka.jwt.secret이 되어 있었음)
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 3600000
 
 server:
   port: 8083

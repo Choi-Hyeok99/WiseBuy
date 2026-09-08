@@ -50,6 +50,12 @@ public class SecurityConfig {
         http.csrf().disable()
             .authorizeRequests()
             .requestMatchers("/user/send-email", "/user/signup","/user/login").permitAll()
+            // 컨트롤러에서 예외가 터지면 Spring Boot가 내부적으로 /error로 다시 요청을 보내서 에러 응답을 만드는데,
+            // /error가 permitAll이 아니면 이 내부 요청마저 "인증 안 됨"으로 막혀서 진짜 에러(예: 500)가
+            // 403 "Access Denied"로 둔갑해버린다. 그래서 /error는 항상 permitAll이어야 한다.
+            .requestMatchers("/error").permitAll()
+            // Swagger UI 리소스와 API 명세(JSON)는 문서 열람용이라 인증 없이 볼 수 있어야 한다.
+            .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
             .requestMatchers(HttpMethod.GET, "/products/**").permitAll()
             .requestMatchers(HttpMethod.POST, "/products/**").permitAll()
             .requestMatchers(HttpMethod.GET, "/wishlist/**").authenticated() // GET 요청에 대한 인증 필요 추가

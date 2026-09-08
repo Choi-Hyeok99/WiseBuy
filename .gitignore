@@ -37,3 +37,6 @@ out/
 .vscode/
 .env
 src/main/resources/application.yml
+
+# 개인 작업 메모 (개인정보 포함, 공개 대상 아님)
+WiseBuy_작업요청.md

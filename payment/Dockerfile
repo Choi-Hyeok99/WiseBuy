@@ -8,11 +8,10 @@ FROM eclipse-temurin:17-jre
 WORKDIR /app
 
 # Step 3: 빌드된 JAR 파일 복사
-COPY build/libs/product-0.0.1-SNAPSHOT.jar app.jar
-
+COPY build/libs/payment-0.0.1-SNAPSHOT.jar app.jar
 
 # Step 4: 컨테이너에서 애플리케이션 실행
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
 
-# Step 5: Eureka Server에서 사용하는 포트 노출
-EXPOSE 8082
+# Step 5: 포트 노출 (application.yml의 server.port와 일치)
+EXPOSE 8085

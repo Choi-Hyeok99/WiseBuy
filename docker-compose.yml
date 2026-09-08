@@ -50,8 +50,18 @@ services:
       - "9092:9092"
     environment:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      # 리스너를 두 개로 나눈다 - 각각 "누가 접속할 때 쓰는 주소"가 다르기 때문이다.
+      #   INTERNAL(29092) : 같은 도커 네트워크 안의 다른 컨테이너(order, product, payment)가
+      #                      "kafka:29092"로 접속한다.
+      #   EXTERNAL(9092)  : 이 컴퓨터(호스트)에서 직접 접속할 때 쓴다. 포트가 3310:3306처럼
+      #                      호스트로 매핑돼 있으니 "localhost:9092"로 접속한다.
+      # 예전엔 리스너가 하나(PLAINTEXT://localhost:9092)뿐이었는데, 그러면 컨테이너 안에서
+      # 접속한 다른 서비스도 "다음엔 localhost:9092로 다시 접속해라"라는 응답을 받게 되고,
+      # 그 서비스 입장에선 localhost가 자기 자신이라 연결이 끊긴다. 그래서 두 리스너로 분리했다.
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_BROKER_ID: 1
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     depends_on:
@@ -80,11 +90,29 @@ services:
     ports:
       - "8081:8081"
     environment:
-      SPRING_DATASOURCE_URL_USER: ${SPRING_DATASOURCE_URL_USER}
-      SPRING_DATASOURCE_USERNAME: ${MYSQL_DATASOURCE_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_DATASOURCE_PASSWORD}
+      # ---- DB ----
+      # .env의 서비스별 키(SPRING_DATASOURCE_URL_USER 등)를,
+      # user/application.yml이 실제로 찾는 이름(DB_URL/DB_USERNAME/DB_PASSWORD)으로 바꿔서 주입한다.
+      DB_URL: ${SPRING_DATASOURCE_URL_USER}
+      DB_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      DB_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      # ---- Redis / Eureka ----
+      # 비밀값이 아니라 이 docker-compose 네트워크 안에서 항상 고정되는 주소라 .env가 아니라 여기 직접 적는다.
+      # (redis, eureka-server는 각각 아래 서비스 이름/컨테이너 이름으로 서로를 찾을 수 있다)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      EUREKA_URL: http://eureka-server:8761/eureka
+      # ---- JWT / 메일 ----
+      JWT_SECRET: ${JWT_SECRET}
+      NAVER_MAIL_ID: ${NAVER_MAIL_ID}
+      NAVER_MAIL_PASSWORD: ${NAVER_MAIL_PASSWORD}
     depends_on:
       - eureka-server
+      - microservices_db
+      - redis
+    # DB/Redis 컨테이너가 완전히 켜지기 전에 앱이 먼저 뜨면서 접속에 실패해 죽는 경우가 있어,
+    # 실패해도 자동으로 재시작을 시도하게 해서 뒤늦게라도 정상 기동되게 한다.
+    restart: on-failure
     networks:
       - my_network
 
@@ -97,11 +125,21 @@ services:
     ports:
       - "8082:8082"
     environment:
-      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL_PRODUCT}
-      SPRING_DATASOURCE_USERNAME: ${MYSQL_DATASOURCE_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_DATASOURCE_PASSWORD}
+      DB_URL: ${SPRING_DATASOURCE_URL_PRODUCT}
+      DB_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      DB_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      EUREKA_URL: http://eureka-server:8761/eureka
+      JWT_SECRET: ${JWT_SECRET}
+      # kafka:29092는 위 kafka 서비스의 INTERNAL 리스너 주소 (컨테이너 간 통신 전용)
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     depends_on:
       - eureka-server
+      - microservices_db
+      - redis
+      - kafka
+    restart: on-failure
     networks:
       - my_network
 
@@ -114,11 +152,18 @@ services:
     ports:
       - "8083:8083"
     environment:
-      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL_WISHLIST}
-      SPRING_DATASOURCE_USERNAME: ${MYSQL_DATASOURCE_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_DATASOURCE_PASSWORD}
+      DB_URL: ${SPRING_DATASOURCE_URL_WISHLIST}
+      DB_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      DB_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      EUREKA_URL: http://eureka-server:8761/eureka
+      JWT_SECRET: ${JWT_SECRET}
     depends_on:
       - eureka-server
+      - microservices_db
+      - redis
+    restart: on-failure
     networks:
       - my_network
 
@@ -132,11 +177,21 @@ services:
     ports:
       - "8084:8084"
     environment:
-      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL_ORDER}
-      SPRING_DATASOURCE_USERNAME: ${MYSQL_DATASOURCE_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_DATASOURCE_PASSWORD}
+      DB_URL: ${SPRING_DATASOURCE_URL_ORDER}
+      DB_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      DB_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      EUREKA_URL: http://eureka-server:8761/eureka
+      JWT_SECRET: ${JWT_SECRET}
+      # kafka:29092는 위 kafka 서비스의 INTERNAL 리스너 주소 (컨테이너 간 통신 전용)
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     depends_on:
       - eureka-server
+      - microservices_db
+      - redis
+      - kafka
+    restart: on-failure
     networks:
       - my_network
 
@@ -149,9 +204,40 @@ services:
     ports:
       - "8000:8000"
     environment:
-      EUREKA_SERVER_URL: http://eureka-server:8761/eureka # Eureka 서버 URL
+      # 예전엔 EUREKA_SERVER_URL이라는, Spring이 인식 못 하는 이름이라 아무 효과가 없었다.
+      # eureka.client.service-url.defaultZone이 relaxed binding으로 인식하는 이름은 EUREKA_URL이 아니라
+      # 아래처럼 application.yml에서 ${EUREKA_URL:...}로 직접 참조하게 해뒀으므로 이 이름을 그대로 쓴다.
+      EUREKA_URL: http://eureka-server:8761/eureka
+      JWT_SECRET: ${JWT_SECRET}
     depends_on:
       - eureka-server
+    restart: on-failure
+    networks:
+      - my_network
+
+  # payment 서버
+  # 예전엔 Dockerfile도 없고 이 블록 자체가 아예 빠져있어서 docker-compose up으로는
+  # payment 서비스가 뜨지 않았다. 다른 서비스와 동일한 패턴으로 새로 추가한다.
+  payment:
+    build:
+      context: ./payment
+      dockerfile: Dockerfile
+    container_name: payment-service
+    ports:
+      - "8085:8085"
+    environment:
+      DB_URL: ${SPRING_DATASOURCE_URL_PAYMENT}
+      DB_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      DB_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      EUREKA_URL: http://eureka-server:8761/eureka
+      JWT_SECRET: ${JWT_SECRET}
+      # kafka:29092는 위 kafka 서비스의 INTERNAL 리스너 주소 (컨테이너 간 통신 전용)
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    depends_on:
+      - eureka-server
+      - microservices_db
+      - kafka
+    restart: on-failure
     networks:
       - my_network
 
@@ -164,9 +250,3 @@ networks:
   my_network:
     name: haengye_project
     driver: bridge
-
-
-
-
-
-

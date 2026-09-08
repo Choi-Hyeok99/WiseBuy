@@ -33,8 +33,10 @@ spring:
 
   data:
     redis:
-      host: ${REDIS_HOST}
-      port: ${REDIS_PORT}
+      # REDIS_HOST가 없으면(로컬에서 그냥 실행) localhost를 쓰고,
+      # 도커에서 실행하면 docker-compose가 REDIS_HOST=redis(컨테이너 이름)를 넣어준다.
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
       timeout: 10000
       lettuce:
         pool:
@@ -49,18 +51,23 @@ eureka:
     fetch-registry: true
     registry-fetch-interval-seconds : 600 # 5초마다 갱신
     disable-delta: true
+    # 로컬 실행/도커 실행에 따라 Eureka 서버 주소가 다르므로(127.0.0.1 vs eureka-server 컨테이너),
+    # EUREKA_URL 환경변수가 있으면 그 값을, 없으면 콜론 뒤 기본값(로컬 주소)을 쓰도록 분기한다.
     service-url:
-       defaultZone: http://127.0.0.1:8761/eureka
-     #  defaultZone: http://eureka-server:8761/eureka ( 도커 환경 )
+      defaultZone: ${EUREKA_URL:http://127.0.0.1:8761/eureka}
 
-    instance:
-      hostname: eureka-server
-      lease-renewal-interval-in-seconds: 10
-      lease-expiration-duration-in-seconds: 30
-      prefer-ip-address: true
-      instance-id: user-service:${random.value}
-      non-secure-port-enabled: true
-      metadata-map:
+  # instance는 eureka.client 밑이 아니라 eureka 바로 아래(client와 같은 레벨)여야 하는 프로퍼티다.
+  # client 밑에 중첩되어 있으면 instance-id, prefer-ip-address 등이 전부 무시되고
+  # Eureka에 기본값(호스트명:포트 형태)으로만 등록된다. 여기서 최상위로 옮겨 실제로 적용되게 한다.
+  # hostname을 user 자신이 아니라 "eureka-server"로 박아둔 것도 잘못된 값이라 제거한다
+  # (prefer-ip-address: true라 어차피 IP 기준으로 등록되지만, 남겨두면 혼란을 준다).
+  instance:
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+    prefer-ip-address: true
+    instance-id: user-service:${random.value}
+    non-secure-port-enabled: true
+    metadata-map:
         instanceId: user-service:${random.value}
 
 jwt:

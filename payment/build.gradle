@@ -27,6 +27,9 @@ dependencies {
 
     implementation project(":common")
 
+    // API 문서 자동화 (Swagger UI): /swagger-ui.html 에서 API 목록 확인 및 직접 호출 테스트 가능
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.5'
+
     // Feign Client
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
 
@@ -34,9 +37,6 @@ dependencies {
     implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
 
     runtimeOnly 'com.mysql:mysql-connector-j'
-
-    // 환경 변수 관리
-    implementation 'io.github.cdimascio:dotenv-java:2.2.4'
 
     // Kafka
     implementation 'org.springframework.kafka:spring-kafka'

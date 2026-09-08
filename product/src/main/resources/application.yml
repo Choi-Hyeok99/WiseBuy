@@ -27,8 +27,10 @@ spring:
 
   data:
     redis:
-      host: ${REDIS_HOST}
-      port: ${REDIS_PORT}
+      # REDIS_HOST가 없으면(로컬에서 그냥 실행) localhost를 쓰고,
+      # 도커에서 실행하면 docker-compose가 REDIS_HOST=redis(컨테이너 이름)를 넣어준다.
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
       timeout: 10000
       lettuce:
         pool:
@@ -38,6 +40,11 @@ spring:
           max-wait: 5000
 
   kafka:
+    # product는 원래 bootstrap-servers 설정이 아예 없어서 Spring 기본값(localhost:9092)에 의존하고
+    # 있었다. 컨테이너 안에서 localhost는 컨테이너 자기 자신을 가리키므로 도커에서는 절대 Kafka
+    # 브로커를 못 찾는다. KAFKA_BOOTSTRAP_SERVERS가 없으면(로컬 실행) localhost:9092, 도커에서는
+    # docker-compose가 kafka:29092(컨테이너 간 통신 전용 리스너)를 넣어준다.
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     listener:
       type: batch
       batch-size: 50
@@ -71,16 +78,21 @@ eureka:
     fetch-registry: true
     registry-fetch-interval-seconds : 600 # 5초마다 갱신
     disable-delta: true
+    # 로컬 실행/도커 실행에 따라 Eureka 서버 주소가 다르므로(127.0.0.1 vs eureka-server 컨테이너),
+    # EUREKA_URL 환경변수가 있으면 그 값을, 없으면 콜론 뒤 기본값(로컬 주소)을 쓰도록 분기한다.
     service-url:
-      defaultZone: http://127.0.0.1:8761/eureka
+      defaultZone: ${EUREKA_URL:http://127.0.0.1:8761/eureka}
 
-    instance:
-      lease-renewal-interval-in-seconds: 10
-      lease-expiration-duration-in-seconds: 30
-      prefer-ip-address: true
-      instance-id: product-service:${random.value}
-      non-secure-port-enabled: true
-      metadata-map:
+  # instance는 eureka.client 밑이 아니라 eureka 바로 아래(client와 같은 레벨)여야 하는 프로퍼티다.
+  # client 밑에 중첩되어 있으면 instance-id, prefer-ip-address 등이 전부 무시되고
+  # Eureka에 기본값(호스트명:포트 형태)으로만 등록된다. 여기서 최상위로 옮겨 실제로 적용되게 한다.
+  instance:
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+    prefer-ip-address: true
+    instance-id: product-service:${random.value}
+    non-secure-port-enabled: true
+    metadata-map:
         instanceId: product-service:${random.value}
 
 jwt:
@@ -115,7 +127,9 @@ management:
   endpoints:
     web:
       exposure:
-        include: "*"
+        # "*"로 열어두면 /actuator/env, /actuator/beans 등 내부 설정·빈 정보까지 전부 외부에 노출된다.
+        # gateway-service와 동일하게 헬스체크/기본 정보만 노출하도록 제한한다.
+        include: health, info
   endpoint:
     retries:
       enabled: true
