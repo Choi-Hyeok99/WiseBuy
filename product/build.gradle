@@ -70,9 +70,8 @@ dependencies {
 	// 테스트 관련
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-	// 동시성 통합 테스트: 실제 Redis(컨테이너) 위에서 Lua 스크립트를 그대로 돌려 오버셀이 없는지 검증. Docker 필요.
-	testImplementation 'org.testcontainers:testcontainers:1.20.4'
-	testImplementation 'org.testcontainers:junit-jupiter:1.20.4'
+	// 동시성 통합 테스트(ProductStockConcurrencyTest): localhost:6379 Redis 위에서 Lua 스크립트를
+	// 그대로 돌려 오버셀이 없는지 검증. Redis가 없으면 테스트를 스킵한다.
 }
 
 tasks.named('test') {
