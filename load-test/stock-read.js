@@ -7,28 +7,28 @@ import { check } from 'k6';
 const BASE = __ENV.BASE_URL || 'http://localhost:8000/product-service';
 const PRODUCT_ID = __ENV.PRODUCT_ID || '35';
 
+// RPS 단계. 무릎(p95가 꺾이는 지점)을 보려고 좁게 잡았다. --env MAX_RPS 로 상한 조정 가능.
+const MAX = Number(__ENV.MAX_RPS || 1600);
 export const options = {
   scenarios: {
     ramp: {
       executor: 'ramping-arrival-rate',
       startRate: 100,
       timeUnit: '1s',
-      preAllocatedVUs: 200,
-      maxVUs: 3000,
+      preAllocatedVUs: 100,
+      maxVUs: 2000,
       stages: [
-        { target: 100,  duration: '20s' }, // warmup
-        { target: 500,  duration: '30s' },
-        { target: 1000, duration: '30s' },
-        { target: 2000, duration: '30s' },
-        { target: 3000, duration: '30s' },
-        { target: 4000, duration: '30s' },
-        { target: 0,    duration: '10s' },
+        { target: 100,               duration: '15s' }, // warmup
+        { target: Math.round(MAX*0.25), duration: '25s' },
+        { target: Math.round(MAX*0.5),  duration: '25s' },
+        { target: Math.round(MAX*0.75), duration: '25s' },
+        { target: MAX,                  duration: '25s' },
+        { target: 0,                    duration: '10s' },
       ],
     },
   },
   thresholds: {
-    // 판정 기준. 넘어도 리포트는 끝까지 나온다. 이 지점 근처가 "한계".
-    http_req_failed: ['rate<0.01'],       // 실패율 1% 미만
+    http_req_failed: ['rate<0.01'],
     http_req_duration: ['p(95)<500', 'p(99)<1000'],
   },
 };

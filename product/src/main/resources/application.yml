@@ -6,10 +6,13 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     hikari:
-      maximum-pool-size: 100
-      minimum-idle: 20
+      # 예전엔 100. 서비스 6개 × 100이면 MySQL 한 대에 커넥션 600개 요구인데 MySQL 기본 max_connections는 151이라
+      # 부하만 조금 줘도 "Too many connections"로 터졌다. HikariCP 권장은 (코어수*2 + 디스크수) 수준이라 20이면 충분.
+      # connection-timeout도 30s면 풀 고갈 시 요청이 30초 매달리므로, 5초로 줄여 병목이 빨리 드러나게 한다.
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 5000
       idle-timeout: 30000
-      connection-timeout: 30000
       max-lifetime: 1800000
   jpa:
     properties:

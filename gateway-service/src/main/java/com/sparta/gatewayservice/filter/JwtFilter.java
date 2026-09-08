@@ -36,9 +36,9 @@ public class JwtFilter extends AbstractGatewayFilterFactory<JwtFilter.Config> {
             ServerHttpRequest request = exchange.getRequest();
             ServerHttpResponse response = exchange.getResponse();
             String path = request.getURI().getPath();
-            log.info("Authorization Header: {}", request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION));
-            log.info("Response status code: {}", response.getStatusCode());
-            log.info("path: {}", path);
+            // 요청마다 찍히던 로그들. 부하 중 게이트웨이 CPU를 크게 먹어서 info → debug로 내렸다.
+            // Token 값 로그는 JWT가 그대로 로그에 남아 보안상으로도 안 좋아 debug로.
+            log.debug("path: {}", path);
 
             if (!request.getHeaders().containsKey(HttpHeaders.AUTHORIZATION)) {
                 return chain.filter(exchange);
@@ -50,7 +50,7 @@ public class JwtFilter extends AbstractGatewayFilterFactory<JwtFilter.Config> {
             }
 
             String token = authHeader.substring(7);
-            log.info("Token: {}", token);
+            log.debug("Token: {}", token);
 
             try {
                 Claims claims = Jwts.parser()
@@ -58,7 +58,7 @@ public class JwtFilter extends AbstractGatewayFilterFactory<JwtFilter.Config> {
                                     .parseClaimsJws(token)
                                     .getBody();
 
-                log.info("JWT Claims: ");
+                log.debug("JWT Claims: ");
                 ServerHttpRequest.Builder mutatedRequest = request.mutate();
 
                 // ** 역할(Role) 검증 제거 **
@@ -69,10 +69,10 @@ public class JwtFilter extends AbstractGatewayFilterFactory<JwtFilter.Config> {
                     String claimKey = "X-Claim-" + entry.getKey();
                     String claimValue = String.valueOf(entry.getValue());
                     mutatedRequest.header(claimKey, claimValue);
-                    log.info("{}: {}", claimKey, claimValue);
+                    log.debug("{}: {}", claimKey, claimValue);
                     if ("address".equals(entry.getKey())) {
                         mutatedRequest.header("X-Claim-Address", claimValue);
-                        log.info("X-Claim-Address: {}", claimValue);
+                        log.debug("X-Claim-Address: {}", claimValue);
                     }
                 }
 
@@ -84,11 +84,11 @@ public class JwtFilter extends AbstractGatewayFilterFactory<JwtFilter.Config> {
                 return handleUnauthorized(response, "JWT validation failed: " + e.getMessage());
             }
 
-            log.info("Custom PRE filter: request uri -> {}", request.getURI());
-            log.info("Custom PRE filter: request id -> {}", request.getId());
+            log.debug("Custom PRE filter: request uri -> {}", request.getURI());
+            log.debug("Custom PRE filter: request id -> {}", request.getId());
 
             return chain.filter(exchange).then(Mono.fromRunnable(() -> {
-                log.info("Custom POST filter: response status code -> {}", response.getStatusCode());
+                log.debug("Custom POST filter: response status code -> {}", response.getStatusCode());
             }));
         };
     }

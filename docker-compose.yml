@@ -4,6 +4,9 @@ services:
   microservices_db:
     image: mysql:8.0.36
     container_name: microservices_db
+    # MySQL 8 기본 max_connections=151. 서비스 5개 × 풀 20 = 최대 100 + 시스템 커넥션 여유까지
+    # 부하테스트에서 넉넉하도록 300으로 상향한다.
+    command: --max-connections=300
     ports:
       - "3310:3306"
     environment:

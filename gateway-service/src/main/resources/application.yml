@@ -99,4 +99,6 @@ jwt:
 
 logging:
   level:
-    org.springframework.cloud.gateway: DEBUG
+    # 부하 중 모든 요청마다 DEBUG 로그를 쏟으면 게이트웨이 CPU를 크게 먹는다.
+    # 디버깅이 필요할 때만 DEBUG로 올리고, 평소엔 INFO.
+    org.springframework.cloud.gateway: INFO
