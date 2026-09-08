@@ -10,6 +10,7 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,12 +41,22 @@ public class ProductConsumerService {
         log.info("order.create 배치 수신: {}건", messages.size());
 
         Map<Long, Integer> deltaByProduct = new HashMap<>();
+        Map<Long, List<String>> eventIdsByProduct = new HashMap<>();
         for (KafkaMessage<Map<String, Object>> message : messages) {
             try {
                 Map<String, Object> data = message.getData();
+                Long orderId = ((Number) data.get("orderId")).longValue();
                 Long productId = ((Number) data.get("productId")).longValue();
                 int quantity = ((Number) data.get("quantity")).intValue();
+                String eventId = orderId + ":" + productId;
+
+                // 멱등 처리: 재전달로 같은 (주문,상품) 이벤트가 또 와도 DB 재고를 두 번 반영하지 않는다.
+                if (redisUtility.isEventProcessed(eventId)) {
+                    log.info("이미 반영된 order.create 이벤트 - {} (건너뜀)", eventId);
+                    continue;
+                }
                 deltaByProduct.merge(productId, quantity, Integer::sum);
+                eventIdsByProduct.computeIfAbsent(productId, k -> new ArrayList<>()).add(eventId);
             } catch (Exception e) {
                 log.error("order.create 메시지 파싱 실패: {}", message, e);
             }
@@ -54,6 +65,8 @@ public class ProductConsumerService {
         deltaByProduct.forEach((productId, delta) -> {
             try {
                 productService.executeStockUpdate(productId, delta);
+                // DB 반영 성공 후에 "처리됨"으로 표시한다. 실패하면 표시 안 하므로 재전달 시 다시 시도됨.
+                eventIdsByProduct.get(productId).forEach(redisUtility::markEventProcessed);
             } catch (Exception e) {
                 log.error("DB 재고 반영 실패 - 상품 ID: {}, 합산 수량: {}", productId, delta, e);
             }

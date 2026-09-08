@@ -124,4 +124,17 @@ public class RedisUtility {
         String stockKey = "product_stock:" + productId;
         return redisTemplate.execute(stockRollbackScript, Collections.singletonList(stockKey), String.valueOf(quantity));
     }
+
+    // Kafka at-least-once 재전달 대비 이벤트 멱등 처리.
+    // 처리 성공 후 markEventProcessed로 표시하고, 다음에 같은 이벤트가 오면 isEventProcessed로 걸러낸다.
+    // TTL 1시간 — 그 이후까지 재전달되는 경우는 사실상 없고, 키가 무한정 쌓이지 않게 한다.
+    private static final String EVENT_KEY_PREFIX = "evt:processed:";
+
+    public boolean isEventProcessed(String eventId) {
+        return Boolean.TRUE.equals(redisTemplate.hasKey(EVENT_KEY_PREFIX + eventId));
+    }
+
+    public void markEventProcessed(String eventId) {
+        redisTemplate.opsForValue().set(EVENT_KEY_PREFIX + eventId, "1", java.time.Duration.ofHours(1));
+    }
 }
