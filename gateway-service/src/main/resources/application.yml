@@ -1,6 +1,12 @@
 spring:
   application:
     name: gateway-service
+  data:
+    redis:
+      # RequestRateLimiter가 토큰을 세는 저장소. 도커에서는 REDIS_HOST=redis가 주입되고,
+      # 로컬 실행이면 콜론 뒤 기본값(localhost)을 쓴다. (product/order와 같은 규약)
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
   cloud:
     gateway:
       routes:
@@ -20,6 +26,14 @@ spring:
           filters:
             - StripPrefix=1
             - name: JwtFilter # JwtFilter ??
+            # 재고 조회는 가볍지만 선착순엔 모두가 때리는 경로다. 사람이 상품 페이지를 보는 건
+            # 초당 1~2건인데, 키(IP/사용자)당 초당 100건 + 순간 버스트 200건이면 정상 사용자엔
+            # 여유롭고 스크립트성 폭주만 걸린다. 넘으면 즉시 429 (뒤 서비스로 안 넘어감).
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@userOrIpKeyResolver}"
+                redis-rate-limiter.replenishRate: 100
+                redis-rate-limiter.burstCapacity: 200
 
         - id: order-service
           uri: lb://order-service
@@ -28,6 +42,13 @@ spring:
           filters:
             - StripPrefix=1
             - name: JwtFilter # JwtFilter ??
+            # 주문은 Feign 체인이 무거워 ~250 req/s에서 포화(Day 2). 사용자당 초당 20건 +
+            # 버스트 40건으로 묶어, 한 사용자가 몰아쳐도 전체가 무너지지 않게 한다.
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@userOrIpKeyResolver}"
+                redis-rate-limiter.replenishRate: 20
+                redis-rate-limiter.burstCapacity: 40
 
 
         - id: wishlist-service

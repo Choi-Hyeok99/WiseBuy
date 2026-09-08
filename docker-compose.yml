@@ -212,8 +212,12 @@ services:
       # 아래처럼 application.yml에서 ${EUREKA_URL:...}로 직접 참조하게 해뒀으므로 이 이름을 그대로 쓴다.
       EUREKA_URL: http://eureka-server:8761/eureka
       JWT_SECRET: ${JWT_SECRET}
+      # RequestRateLimiter가 토큰을 세는 Redis. 다른 서비스와 동일하게 컨테이너 이름으로 접근.
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
       - eureka-server
+      - redis
     restart: on-failure
     networks:
       - my_network

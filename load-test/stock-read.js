@@ -34,6 +34,9 @@ export const options = {
 };
 
 export default function () {
-  const res = http.get(`${BASE}/products/${PRODUCT_ID}/stock`);
-  check(res, { 'status is 200': (r) => r.status === 200 });
+  // 429 = 게이트웨이 rate limit (의도된 거절)이라 실패로 세지 않는다. 200 또는 429가 정상.
+  const res = http.get(`${BASE}/products/${PRODUCT_ID}/stock`, {
+    responseCallback: http.expectedStatuses(200, 429),
+  });
+  check(res, { 'status is 200 or 429': (r) => r.status === 200 || r.status === 429 });
 }

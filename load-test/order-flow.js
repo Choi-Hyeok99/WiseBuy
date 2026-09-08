@@ -10,8 +10,10 @@ const PAY = __ENV.PAYMENT_URL || 'http://localhost:8085';
 const USER_FROM = Number(__ENV.USER_FROM || 301);
 const USER_TO = Number(__ENV.USER_TO || 310);
 
-// 409 = 재고 소진으로 인한 "정상 거절". 시스템 실패(5xx)와 구분해서 따로 센다.
+// 409 = 재고 소진, 429 = 게이트웨이 rate limit. 둘 다 "시스템이 의도적으로 거절한 것"이라
+// 5xx(진짜 장애)와 구분해서 따로 센다.
 const rejectedByStock = new Counter('orders_rejected_by_stock');
+const rejectedByRateLimit = new Counter('orders_rejected_by_ratelimit');
 
 export const options = {
   scenarios: {
@@ -32,7 +34,7 @@ export const options = {
     },
   },
   thresholds: {
-    // 409는 expectedStatuses로 제외했으므로 http_req_failed에는 5xx/네트워크 오류만 잡힌다.
+    // 409/429는 expectedStatuses로 제외했으므로 http_req_failed에는 5xx/네트워크 오류만 잡힌다.
     http_req_failed: ['rate<0.02'],
     'http_req_duration{name:order}': ['p(95)<1500'],
   },
@@ -49,9 +51,13 @@ export default function () {
   const orderRes = http.post(
     `${GW}/order-service/orders`,
     JSON.stringify({ userId: Number(uid), quantity: 1, address: 'Seoul' }),
-    { headers, tags: { name: 'order' }, responseCallback: http.expectedStatuses(200, 409) },
+    { headers, tags: { name: 'order' }, responseCallback: http.expectedStatuses(200, 409, 429) },
   );
 
+  if (orderRes.status === 429) {
+    rejectedByRateLimit.add(1); // 게이트웨이 rate limit = 의도된 거절
+    return;
+  }
   if (orderRes.status === 409) {
     rejectedByStock.add(1); // 재고 소진 = 의도된 거절
     return;
