@@ -32,6 +32,13 @@ dependencies {
     // Feign Client
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
 
+    // Feign 호출을 CircuitBreaker + TimeLimiter로 감싼다. product가 죽거나 느려질 때
+    // order 스레드가 물려 같이 죽지 않도록 빠르게 끊고(fail-fast) fallback으로 넘긴다.
+    implementation 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j'
+
+    // /actuator/health, /actuator/circuitbreakers 로 서킷 상태(CLOSED/OPEN/HALF_OPEN) 확인용
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
     implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
 
     // Kafka

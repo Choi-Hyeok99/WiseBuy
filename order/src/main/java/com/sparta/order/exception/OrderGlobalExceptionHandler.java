@@ -1,6 +1,8 @@
 package com.sparta.order.exception;
 
 import feign.FeignException;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import org.springframework.cloud.client.circuitbreaker.NoFallbackAvailableException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -8,6 +10,32 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class OrderGlobalExceptionHandler {
+
+    // product 서비스 연결 실패·타임아웃 → fallback이 던지는 예외. 재고 부족(409)과 달리
+    // "우리 잘못이 아니라 하위 서비스 장애"라서 503으로 내보낸다.
+    @ExceptionHandler(ProductServiceUnavailableException.class)
+    public ResponseEntity<String> handleProductUnavailable(ProductServiceUnavailableException ex){
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(ex.getMessage());
+    }
+
+    // 서킷이 열려 호출 자체가 차단된 경우 (fallback을 안 타는 경로 대비).
+    @ExceptionHandler(CallNotPermittedException.class)
+    public ResponseEntity<String> handleCircuitOpen(CallNotPermittedException ex){
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body("일시적으로 요청을 처리할 수 없습니다. 잠시 후 다시 시도해 주세요.");
+    }
+
+    // fallback을 안 붙인 Feign 클라이언트(wishlist/payment)의 호출이 서킷 브레이커에서 실패한 경우.
+    // 감싼 원인이 하위 서비스의 4xx면 그 상태를 살리고, 그 외(서킷 오픈·연결 실패)는 503.
+    @ExceptionHandler(NoFallbackAvailableException.class)
+    public ResponseEntity<String> handleNoFallback(NoFallbackAvailableException ex){
+        Throwable cause = ex.getCause();
+        if (cause instanceof FeignException fe) {
+            return handleFeign(fe);
+        }
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body("일시적으로 요청을 처리할 수 없습니다. 잠시 후 다시 시도해 주세요.");
+    }
 
     @ExceptionHandler(OrderNotFoundException.class)
     public ResponseEntity<String> handleOrderNotFoundException(OrderNotFoundException ex){
