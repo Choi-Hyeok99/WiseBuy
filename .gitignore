@@ -38,5 +38,6 @@ out/
 .env
 src/main/resources/application.yml
 
-# 개인 작업 메모 (개인정보 포함, 공개 대상 아님)
+# 개인 작업 메모 (개인정보 포함 / 내부 검토용, 공개 대상 아님)
 WiseBuy_작업요청.md
+내부메모_Redis_Kafka_및_부하테스트.md
