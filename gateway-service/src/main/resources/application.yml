@@ -62,9 +62,10 @@ eureka:
     fetch-registry: true
     registry-fetch-interval-seconds: 600 # 5??? ??
     disable-delta: true
+    # 로컬 실행/도커 실행에 따라 Eureka 서버 주소가 다르므로(127.0.0.1 vs eureka-server 컨테이너),
+    # EUREKA_URL 환경변수가 있으면 그 값을, 없으면 콜론 뒤 기본값(로컬 주소)을 쓰도록 분기한다.
     service-url:
-          defaultZone: http://127.0.0.1:8761/eureka
-  #      defaultZone: http://eureka-server:8761/eureka ( 도커 환경 )
+      defaultZone: ${EUREKA_URL:http://127.0.0.1:8761/eureka}
 
   instance:
     lease-renewal-interval-in-seconds: 10
@@ -91,7 +92,9 @@ management:
       enabled: true
 
 jwt:
-  secret: dc5e94f5a9bdfa05694b14baa9a37117cfcd5a6474c5af3a5b07fe6baee8398d
+  # secret 값을 코드에 직접 적으면 git에 그대로 노출되므로, 실행 시 환경변수(JWT_SECRET)에서 주입받는다.
+  # 로컬 실행: .env 파일의 JWT_SECRET / 도커 실행: docker-compose environment의 JWT_SECRET
+  secret: ${JWT_SECRET}
   expiration: 3600000
 
 logging:

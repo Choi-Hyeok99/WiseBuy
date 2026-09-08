@@ -6,8 +6,15 @@ const userIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const productId = 32;  // 예제 상품 ID
 const address = "서울시 강남구";  // 예제 주소
 
-// JWT 토큰 (테스트용, 실제 테스트 시 동적으로 설정 가능)
-const jwtToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJndXIwNzA5QG5hdmVyLmNvbSIsImFkZHJlc3MiOiIxMjMgTWFpbiBTdHJlZXQiLCJpYXQiOjE3NDIxOTUzODQsImV4cCI6MTc0MjI4MTc4NH0.zizJtXxM8pVTIua71oK-P9L0x_dTcM5bMMV2fxmgw1g';
+// JWT 토큰을 코드에 직접 적으면 git에 그대로 남기 때문에(실제 발급받은 토큰 + 이메일이 페이로드에 노출됐었음),
+// 실행할 때 k6의 --env 옵션으로 주입받는 방식으로 바꾼다.
+// 아래 Authorization 헤더에서 'Bearer '를 이미 붙이므로, 여기엔 "Bearer " 없이 토큰 값만 넣는다.
+// 실행 예시: k6 run --env JWT_TOKEN="eyJ..." ordertest.js
+const jwtToken = __ENV.JWT_TOKEN;
+
+if (!jwtToken) {
+    throw new Error('JWT_TOKEN 환경변수가 필요합니다. 예: k6 run --env JWT_TOKEN="발급받은 토큰" ordertest.js');
+}
 
 // K6 부하 테스트 옵션 설정
 export let options = {
