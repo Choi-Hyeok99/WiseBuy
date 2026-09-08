@@ -38,14 +38,15 @@ public class OrderService {
 
     @Transactional
     public OrderResponseDto createOrder(OrderRequestDto requestDto, Long userId, String address) {
-        // 1. 위시리스트 확인
+        // 1. 위시리스트 + 상품 정보/재고 검증 (상품별 getProductById 1회, 모든 항목을 재고 차감 전에 먼저 검증)
         List<WishlistItemDto> wishlistItems = fetchWishlist(userId);
+        Map<Long, ProductResponseDto> productById = validateProducts(wishlistItems);
 
         // 2. 주문 엔티티 생성
         Order order = createNewOrder(userId, address);
 
-        // 3. 주문 항목 추가 및 재고 감소
-        int totalAmount = processOrderItems(wishlistItems, order);
+        // 3. 주문 항목 추가 및 재고 감소 (위에서 조회한 상품 정보 재사용 — 재조회 안 함)
+        int totalAmount = processOrderItems(wishlistItems, order, productById);
 
         // 4. 총 금액 업데이트
         order.setTotalAmount(totalAmount);
@@ -180,34 +181,34 @@ public class OrderService {
 
 
     private List<WishlistItemDto> fetchWishlist(Long userId) {
-        // 위시리스트 가져오기
         List<WishlistItemDto> wishlistItems = wishlistClient.getWishlist(userId);
-
-        // 위시리스트 비어 있는지 확인
         if (wishlistItems.isEmpty()) {
             throw new IllegalArgumentException("위시리스트가 비어 있습니다.");
         }
+        return wishlistItems;
+    }
 
-        // 위시리스트 상품 상태와 재고 확인
+    /**
+     * 위시리스트 각 상품을 한 번씩만 조회해 상태·재고를 검증하고, productId → 상품정보 맵으로 돌려준다.
+     * 예전엔 이 검증 루프(fetchWishlist)와 아래 processOrderItems가 각자 getProductById를 호출해
+     * 상품당 2회 조회했다. 검증은 모든 항목에 대해 재고 차감 전에 끝나므로 fail-fast는 그대로 유지된다.
+     */
+    private Map<Long, ProductResponseDto> validateProducts(List<WishlistItemDto> wishlistItems) {
+        Map<Long, ProductResponseDto> productById = new HashMap<>();
         for (WishlistItemDto item : wishlistItems) {
-            // 상품 정보 가져오기
             ProductResponseDto product = productClient.getProductById(item.getProductId());
             if (product == null) {
                 throw new IllegalArgumentException("상품 정보를 찾을 수 없습니다. ID: " + item.getProductId());
             }
-
-            // 상품 상태 확인
             if (!"AVAILABLE".equals(product.getStatus())) {
                 throw new IllegalStateException("상품이 구매 불가능한 상태입니다. 상품 ID: " + item.getProductId());
             }
-
-            // 상품 재고 확인
             if (product.getStock() < item.getQuantity()) {
                 throw new IllegalStateException("상품 재고가 부족합니다. 상품 ID: " + item.getProductId());
             }
+            productById.put(item.getProductId(), product);
         }
-
-        return wishlistItems;
+        return productById;
     }
 
     // order.create 이벤트 payload. product 배치 컨슈머가 productId/quantity를 읽어 DB 재고를 반영한다.
@@ -229,31 +230,19 @@ public class OrderService {
         order.setStatus(OrderStatus.PENDING);
         return orderRepository.save(order);
     }
-    private int processOrderItems(List<WishlistItemDto> wishlistItems, Order order) {
+    private int processOrderItems(List<WishlistItemDto> wishlistItems, Order order,
+                                  Map<Long, ProductResponseDto> productById) {
         int totalAmount = 0;
 
         for (WishlistItemDto item : wishlistItems) {
-            // 1. 제품 정보 가져오기
-            ProductResponseDto product = productClient.getProductById(item.getProductId());
-            if (product == null) {
-                throw new IllegalArgumentException("상품 정보를 찾을 수 없습니다. ID: " + item.getProductId());
-            }
+            // validateProducts에서 이미 조회·검증한 상품 정보를 재사용 (getProductById 재호출 안 함)
+            ProductResponseDto product = productById.get(item.getProductId());
 
-            // 2. 제품 상태 확인
-            if (!"AVAILABLE".equals(product.getStatus())) {
-                throw new IllegalArgumentException("상품이 구매 가능한 상태가 아닙니다. 상품 ID: " + item.getProductId());
-            }
-
-            // 3. 재고 확인
-            if (product.getStock() < item.getQuantity()) {
-                throw new IllegalArgumentException("상품의 재고가 부족합니다. 상품 ID: " + item.getProductId() + ", 남은 재고: " + product.getStock());
-            }
-
-            // 4. 주문 항목 생성
+            // 주문 항목 생성
             OrderItem orderItem = createOrderItem(order, product, item);
             totalAmount += orderItem.getPrice() * orderItem.getQuantity();
 
-            // 5. 재고 차감 요청
+            // 재고 차감 요청
             // updateStock의 quantity 규약은 "차감할 수량(양수)"이다. product 쪽 Lua가 DECRBY로 그만큼 빼고,
             // stock.update 컨슈머도 (stock - quantity)로 계산한다. 예전엔 여기서 -item.getQuantity()(음수)를
             // 보내서 DECRBY -n = +n 이 되어 주문할수록 재고가 오히려 늘어나고, 재고 부족 체크(stock < -n)도
