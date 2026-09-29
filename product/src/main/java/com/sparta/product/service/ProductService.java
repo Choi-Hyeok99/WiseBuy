@@ -105,8 +105,9 @@ public class ProductService {
         int stock = productRepository.findStockById(productId)
                                      .orElseThrow(() -> new NotFoundException("해당 상품이 존재하지 않습니다. 상품 ID: " + productId));
 
-        // Redis 캐시에 저장 (TTL 설정 가능)
-        redisUtility.saveToCache(stockKey, stock, 300); // 300초 TTL
+        // 캐시 미스일 때만 채운다. 무조건 SET하면 그 사이 reserveStock이 원자적으로 갱신해둔
+        // 실시간 재고 예약 카운터를 이 DB 스냅샷이 덮어써버릴 수 있다(SET NX로 방지).
+        redisUtility.saveToCacheIfAbsent(stockKey, stock, 300); // 300초 TTL
 
         return stock;
     }
@@ -133,7 +134,12 @@ public class ProductService {
 
     /**
      * order.create 배치 컨슈머가 호출하는 DB 재고 반영. 상품별로 합산된 수량(양수=차감, 음수=복구)을 받는다.
-     * Redis(예약)는 이미 반영된 상태이고, 여기서 DB와 캐시를 그 결과에 맞춘다.
+     * Redis(예약)는 이미 반영된 상태이고, 여기서는 DB만 그 결과에 맞춘다.
+     *
+     * 예전엔 여기서 DB로 계산한 값을 Redis 캐시(product_stock:{id})에도 다시 썼는데, 그 키는
+     * reserveStock/rollbackOrderEvent가 실시간으로 관리하는 원자 예약 카운터와 같은 키였다. 이 비동기
+     * 쓰기가 그 카운터를 덮어써 되돌리면서 지속적인 동시 주문 상황에서 오버셀이 발생했다(재검증 완료).
+     * Redis 카운터는 이미 정확하므로 여기서 다시 쓸 필요가 없어 그 호출을 제거한다.
      */
     @Transactional
     public void executeStockUpdate(Long productId, int quantity) {
@@ -150,7 +156,5 @@ public class ProductService {
 
         product.setStock(updatedStock);
         productRepository.save(product);
-
-        redisUtility.saveToCache(STOCK_KEY_PREFIX + productId, updatedStock);
     }
 }

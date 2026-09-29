@@ -39,6 +39,13 @@ public class RedisUtility {
         redisTemplate.opsForValue().set(key, toJson(value), ttlInSeconds, TimeUnit.SECONDS);
     }
 
+    // 키가 진짜로 없을 때만 채운다(SET NX). reserveStock/rollbackOrderEvent가 실시간으로 관리하는
+    // 원자 카운터를 캐시 재채움이 덮어쓰지 않도록 하기 위함 - 무조건 SET하는 saveToCache와 달리
+    // 이미 값이 있으면 아무 것도 하지 않는다.
+    public void saveToCacheIfAbsent(String key, Object value, long ttlInSeconds) {
+        redisTemplate.opsForValue().setIfAbsent(key, toJson(value), ttlInSeconds, TimeUnit.SECONDS);
+    }
+
     public <T> T getFromCache(String key, Class<T> type) {
         String json = redisTemplate.opsForValue().get(key);
         if (json == null) {
@@ -103,5 +110,17 @@ public class RedisUtility {
 
     public void markEventProcessed(String eventId) {
         redisTemplate.opsForValue().set(EVENT_KEY_PREFIX + eventId, "1", Duration.ofHours(1));
+    }
+
+    // stock.rollback처럼 "Redis 복구"와 "DB 반영" 두 단계로 이뤄진 이벤트의 부분 실패를 구분하기 위한
+    // 상태 기반 버전. isEventProcessed/markEventProcessed(존재 여부만 보는 불리언)와 같은 키 prefix·TTL을
+    // 쓰되, 값에 진행 단계를 담아 "Redis는 끝났는데 DB만 실패"한 경우 재시도 시 Redis를 다시 건드리지
+    // 않고 DB만 이어서 처리할 수 있게 한다.
+    public String getEventState(String eventId) {
+        return redisTemplate.opsForValue().get(EVENT_KEY_PREFIX + eventId);
+    }
+
+    public void markEventState(String eventId, String state) {
+        redisTemplate.opsForValue().set(EVENT_KEY_PREFIX + eventId, state, Duration.ofHours(1));
     }
 }
