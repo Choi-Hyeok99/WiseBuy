@@ -1,5 +1,11 @@
 import http from 'k6/http';
 import { check } from 'k6';
+import { Counter, Rate } from 'k6/metrics';
+
+const successCount = new Counter('success_count');   // 200
+const rejectCount = new Counter('reject_count');      // 429 (게이트웨이 레이트리밋, 의도된 거절)
+const failCount = new Counter('fail_count');           // 5xx/네트워크 오류
+const under1s = new Rate('under_1s_rate');             // 1초 이내 응답 비율
 
 // 재고 조회 API 부하테스트.
 // "목표 VU를 찍고 성공했다"가 아니라 "초당 요청 수(RPS)를 점진적으로 올려서 어디서 깨지는지" 를 본다.
@@ -31,6 +37,7 @@ export const options = {
     http_req_failed: ['rate<0.01'],
     http_req_duration: ['p(95)<500', 'p(99)<1000'],
   },
+  summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
 };
 
 export default function () {
@@ -39,4 +46,8 @@ export default function () {
     responseCallback: http.expectedStatuses(200, 429),
   });
   check(res, { 'status is 200 or 429': (r) => r.status === 200 || r.status === 429 });
+  under1s.add(res.timings.duration < 1000);
+  if (res.status === 200) successCount.add(1);
+  else if (res.status === 429) rejectCount.add(1);
+  else failCount.add(1);
 }
