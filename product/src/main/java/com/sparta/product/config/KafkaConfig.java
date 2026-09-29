@@ -9,9 +9,14 @@ import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
+import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
+import org.springframework.util.backoff.FixedBackOff;
 import org.apache.kafka.clients.admin.NewTopic;
 import com.sparta.common.dto.KafkaMessage;
+import com.sparta.product.exception.NotFoundException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -52,11 +57,34 @@ public class KafkaConfig {
     }
 
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, KafkaMessage<Map<String, Object>>> batchFactory() {
+    public ConcurrentKafkaListenerContainerFactory<String, KafkaMessage<Map<String, Object>>> batchFactory(
+            DefaultErrorHandler kafkaErrorHandler) {
         ConcurrentKafkaListenerContainerFactory<String, KafkaMessage<Map<String, Object>>> factory = new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(batchConsumerFactory());
         factory.setBatchListener(true);   // 배치 모드
         factory.setConcurrency(3);        // 파티션 3개를 컨슈머 스레드 3개가 병렬 소비
+        factory.setCommonErrorHandler(kafkaErrorHandler);
         return factory;
+    }
+
+    /**
+     * 리스너가 예외를 밖으로 던지면(비즈니스 예외는 각 리스너가 안에서 잡아 걸러낸다) 1초 간격으로
+     * 최대 3회 재시도하고, 그래도 실패하면 원본 메시지를 {topic}.DLT 로 보낸다(DeadLetterPublishingRecoverer).
+     * 이전엔 리스너가 모든 예외를 안에서 삼켜서 이 핸들러까지 오지도 못했다 - 실패 메시지가 "정상 처리"로
+     * 간주돼 오프셋이 그냥 커밋되고 조용히 유실되던 문제를 막는다.
+     *
+     * NotFoundException처럼 재시도해도 결과가 똑같은 비즈니스 예외는 addNotRetryableExceptions로 등록해
+     * 무의미한 재시도 없이 바로 DLT로 보낸다(재시도와 비즈니스 예외를 구분).
+     *
+     * batchFactory(order.create)에 쓰면 배치 전체가 재시도 대상이 된다(레코드 단위 아님) - 이미 처리된
+     * 이벤트는 order.create의 기존 멱등 처리(evt:processed:*)가 재시도에서도 중복 반영을 막아준다.
+     */
+    @Bean
+    public DefaultErrorHandler kafkaErrorHandler(KafkaTemplate<Object, Object> template) {
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(template);
+        FixedBackOff backOff = new FixedBackOff(1000L, 3L); // 1초 간격, 최대 3회 재시도
+        DefaultErrorHandler handler = new DefaultErrorHandler(recoverer, backOff);
+        handler.addNotRetryableExceptions(NotFoundException.class, IllegalArgumentException.class);
+        return handler;
     }
 }
