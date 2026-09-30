@@ -17,15 +17,22 @@ bash load-test/seed.sh        # 테스트 상품 + 유저 위시리스트 시딩
 ## 실행
 
 ```bash
-# 재고 조회
+# 재고 조회 (Gateway 경유, ramping-arrival-rate 연속 램프)
 k6 run load-test/stock-read.js
+
+# 재고 조회 순수 성능 — Gateway/Rate Limiter 배제, Product Service(:8082) 직접 호출
+# 목표 RPS 하나를 고정해서 받는다. 여러 RPS 단계를 점진적으로 보려면 RATE를 올려가며 반복 실행.
+k6 run --env RATE=500 --env DURATION=60s load-test/product-stock-progressive.js
 
 # 주문 → 결제 플로우 (재고를 크게 잡아야 sustained 측정 가능)
 STOCK=1000000 bash load-test/seed.sh
 k6 run load-test/order-flow.js
+
+# 주문 동시성(오버셀 검증) — 재고를 작게 고정하고 그보다 많은 주문을 동시에 발생시켜 오버셀 여부 확인
+k6 run load-test/order-concurrency.js
 ```
 
-환경변수로 조정: `BASE_URL`, `GATEWAY_URL`, `PAYMENT_URL`, `PRODUCT_ID`, `USER_FROM`, `USER_TO`.
+환경변수로 조정: `BASE_URL`, `GATEWAY_URL`, `PAYMENT_URL`, `PRODUCT_ID`, `USER_FROM`, `USER_TO`. `product-stock-progressive.js`는 `RATE`/`DURATION`/`PREALLOC`/`MAXVUS`.
 
 ## 결과 읽는 법
 
