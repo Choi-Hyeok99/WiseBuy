@@ -88,6 +88,12 @@ public class ProductConsumerService {
      *   DONE            → 완전히 끝남. 통째로 건너뛴다.
      * 이렇게 해야 "Redis 복구는 성공했는데 DB 반영만 실패 → 컨테이너가 재시도"하는 상황에서
      * Redis가 중복으로 복구되는 것을 막으면서도 DB는 결국 정상 반영된다.
+     *
+     * 발행처: 결제 실패 / 사용자 취소 / 결제 시간 초과 만료 / 반품 / 주문 생성 롤백(부분 실패).
+     * restoreDb=false는 주문 생성 트랜잭션이 롤백돼 order.create가 아예 안 나간 경우다. DB 재고는 차감된 적이
+     * 없으므로 Redis 예약만 되돌린다(DB까지 되돌리면 재고가 늘어난다). 값이 없으면 true(이전 메시지 호환).
+     * 이때 order는 예약 성공 여부를 모르는 항목(타임아웃)까지 해제를 보내므로, 수량을 그대로 더하지 않고
+     * 주문별 예약 기록이 있을 때만 그만큼 되돌린다. 기록 기반이라 그 자체로 멱등이다.
      */
     @KafkaListener(topics = "stock.rollback", groupId = "product-service")
     @Transactional
@@ -98,7 +104,15 @@ public class ProductConsumerService {
         Long orderId = ((Number) data.get("orderId")).longValue();
         Long productId = ((Number) data.get("productId")).longValue();
         int quantity = ((Number) data.get("quantity")).intValue();
+        boolean restoreDb = !Boolean.FALSE.equals(data.get("restoreDb"));
         String eventId = "STOCK_ROLLBACK:" + orderId + ":" + productId;
+
+        if (!restoreDb) {
+            Long released = redisUtility.releaseReservationInRedis(String.valueOf(productId), orderId);
+            log.info("stock.rollback 처리 완료(Redis 예약 해제만) - 주문 ID: {}, 상품 ID: {}, 되돌린 수량: {}",
+                    orderId, productId, released);
+            return;
+        }
 
         String state = redisUtility.getEventState(eventId);
         if ("DONE".equals(state)) {

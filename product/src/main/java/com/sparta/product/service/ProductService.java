@@ -120,16 +120,31 @@ public class ProductService {
      * quantity 규약: 양수 = 차감(주문), 음수 = 복구(취소). DB 반영은 여기서 하지 않고
      * order.create 이벤트를 받은 배치 컨슈머(ProductConsumerService)가 처리한다.
      * 재고 부족/상품 없음은 예외를 그대로 던져 주문이 실패하게 둔다(재시도 의미 없음).
+     *
+     * orderId가 오면 주문별 예약 기록을 같이 남긴다. 주문 생성이 롤백되면 order가 "예약을 시도한 항목 전부"에
+     * 대해 해제를 보내는데, 실제로 예약된 것만 되돌리고 늦게 도착한 예약은 막기 위해서다(RedisUtility 참고).
+     *
+     * 예전엔 @Transactional이 붙어 있어서 Redis만 쓰는데도 DB 커넥션을 먼저 잡았다. DB 풀이 고갈되면
+     * order는 3초 타임아웃으로 "실패"라고 보고 롤백했는데, product는 몇 초 뒤 커넥션을 얻어 Redis를 실제로
+     * 차감해 재고가 샜다(SAGA 정합성 검증 중 발견). 재고 관문은 DB와 무관해야 하므로 제거했다.
      */
-    @Transactional
-    public void reserveStock(Long productId, int quantity) {
-        Long remaining = redisUtility.updateStockInRedis(String.valueOf(productId), quantity);
+    public void reserveStock(Long productId, int quantity, Long orderId) {
+        Long remaining = orderId == null
+                ? redisUtility.updateStockInRedis(String.valueOf(productId), quantity)
+                : redisUtility.reserveStockInRedis(String.valueOf(productId), quantity, orderId);
         if (remaining == -1) {
             throw new NotFoundException("상품이 존재하지 않습니다.");
         }
         if (remaining == -2) {
             throw new IllegalStateException("재고 부족으로 주문이 취소되었습니다.");
         }
+        if (remaining == -3) {
+            throw new IllegalStateException("이미 취소된 주문의 재고 예약 요청입니다.");
+        }
+    }
+
+    public void reserveStock(Long productId, int quantity) {
+        reserveStock(productId, quantity, null);
     }
 
     /**

@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -87,6 +88,53 @@ public class RedisUtility {
             "if not stock then return -1 end " +
             "redis.call('incrby', KEYS[1], ARGV[1]) " +
             "return tonumber(stock) + ARGV[1]", Long.class);
+
+    // 주문별 예약 기록(resv:{orderId}:{productId})을 같이 남기는 재고 차감. 기록은 보상(예약 해제)이
+    // "실제로 예약된 만큼만, 한 번만" 되돌리기 위한 근거다.
+    //   기록 = 'RELEASED'  → 이 주문은 이미 포기(해제)됨. 늦게 도착한 예약 요청이라 차감하지 않고 -3
+    //   기록 = 수량         → 같은 주문의 재요청. 이미 차감했으므로 다시 차감하지 않고 현재 재고 반환
+    //   그 외는 기존 차감 스크립트와 동일(-1 없음 / -2 부족)
+    private static final DefaultRedisScript<Long> STOCK_RESERVE_SCRIPT = new DefaultRedisScript<>(
+            "local reserved = redis.call('get', KEYS[2]) " +
+            "if reserved == 'RELEASED' then return -3 end " +
+            "local stock = redis.call('get', KEYS[1]) " +
+            "if not stock then return -1 end " +
+            "stock = tonumber(stock) " +
+            "if reserved then return stock end " +
+            "if stock < tonumber(ARGV[1]) then return -2 end " +
+            "redis.call('decrby', KEYS[1], ARGV[1]) " +
+            "redis.call('set', KEYS[2], ARGV[1], 'EX', ARGV[2]) " +
+            "return stock - ARGV[1]", Long.class);
+
+    // 예약 해제(주문 생성 롤백 보상): 예약 기록이 있으면 그 수량만큼 되돌리고, 기록은 'RELEASED'로 바꾼다.
+    // 기록이 없어도 'RELEASED'를 남긴다(툼스톤) - 타임아웃으로 결과를 모르는 예약 요청이 해제보다 늦게
+    // 도착해도 위 예약 스크립트가 -3으로 막는다. 반환: 되돌린 수량(0 = 되돌릴 것 없음), -1 = 재고 키 없음.
+    private static final DefaultRedisScript<Long> STOCK_RELEASE_SCRIPT = new DefaultRedisScript<>(
+            "local reserved = redis.call('get', KEYS[2]) " +
+            "redis.call('set', KEYS[2], 'RELEASED', 'EX', ARGV[1]) " +
+            "if (not reserved) or reserved == 'RELEASED' then return 0 end " +
+            "if redis.call('exists', KEYS[1]) == 0 then return -1 end " +
+            "redis.call('incrby', KEYS[1], reserved) " +
+            "return tonumber(reserved)", Long.class);
+
+    // 예약 기록 보관 기간. 해제 이벤트가 Kafka 지연·재시도로 늦게 와도 기록이 남아 있도록 넉넉히 둔다.
+    private static final long RESERVATION_TTL_SECONDS = Duration.ofDays(1).toSeconds();
+
+    public Long reserveStockInRedis(String productId, int quantity, Long orderId) {
+        return redisTemplate.execute(STOCK_RESERVE_SCRIPT,
+                List.of("product_stock:" + productId, reservationKey(orderId, productId)),
+                String.valueOf(quantity), String.valueOf(RESERVATION_TTL_SECONDS));
+    }
+
+    public Long releaseReservationInRedis(String productId, Long orderId) {
+        return redisTemplate.execute(STOCK_RELEASE_SCRIPT,
+                List.of("product_stock:" + productId, reservationKey(orderId, productId)),
+                String.valueOf(RESERVATION_TTL_SECONDS));
+    }
+
+    private static String reservationKey(Long orderId, String productId) {
+        return "resv:" + orderId + ":" + productId;
+    }
 
     public Long updateStockInRedis(String productId, int quantity) {
         return redisTemplate.execute(STOCK_UPDATE_SCRIPT,
