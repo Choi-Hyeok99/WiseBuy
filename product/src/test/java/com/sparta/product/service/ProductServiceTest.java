@@ -29,6 +29,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -242,48 +243,42 @@ class ProductServiceTest {
     class ExecuteStockUpdate {
 
         @Test
-        @DisplayName("양수 수량이면 그만큼 DB 재고를 깎고 캐시를 갱신한다")
+        @DisplayName("양수 수량이면 원자적 상대 UPDATE로 차감하고, Redis 예약 카운터는 건드리지 않는다")
         void decrements() {
-            Product p = product(1L, "상품A", 50);
-            when(productRepository.findById(1L)).thenReturn(Optional.of(p));
+            when(productRepository.decreaseStock(1L, 10)).thenReturn(1);
 
             productService.executeStockUpdate(1L, 10);
 
-            assertThat(p.getStock()).isEqualTo(40);
-            verify(productRepository).save(p);
-            verify(redisUtility).saveToCache("product_stock:1", 40);
+            verify(productRepository).decreaseStock(1L, 10);
+            verifyNoInteractions(redisUtility); // DB 값으로 Redis 카운터를 덮어쓰면 오버셀 (4c817bf)
         }
 
         @Test
-        @DisplayName("음수 수량이면(취소/롤백) 그만큼 DB 재고를 되돌린다")
+        @DisplayName("음수 수량이면(취소/롤백) 같은 UPDATE로 되돌린다")
         void restores() {
-            Product p = product(1L, "상품A", 40);
-            when(productRepository.findById(1L)).thenReturn(Optional.of(p));
+            when(productRepository.decreaseStock(1L, -10)).thenReturn(1);
 
             productService.executeStockUpdate(1L, -10);
 
-            assertThat(p.getStock()).isEqualTo(50);
-            verify(redisUtility).saveToCache("product_stock:1", 50);
+            verify(productRepository).decreaseStock(1L, -10);
+            verifyNoInteractions(redisUtility);
         }
 
         @Test
-        @DisplayName("DB 기준으로 음수가 되려 하면 0으로 클램프한다 (Redis-DB가 이미 어긋난 상황)")
-        void clampsInsteadOfGoingNegative() {
-            // 배치 컨슈머에서 호출되므로 예외를 던지면 배치 전체가 재시도 루프에 빠진다.
-            // Redis 관문을 이미 통과한 상태라 여기서는 음수만 막고 로그로 남긴다.
-            Product p = product(1L, "상품A", 5);
-            when(productRepository.findById(1L)).thenReturn(Optional.of(p));
+        @DisplayName("읽고-계산-저장을 하지 않는다 (동시 컨슈머 lost update / 0 클램프로 차이 유실 방지)")
+        void neverReadModifyWrite() {
+            when(productRepository.decreaseStock(1L, 10)).thenReturn(1);
 
             productService.executeStockUpdate(1L, 10);
 
-            assertThat(p.getStock()).isEqualTo(0);
-            verify(redisUtility).saveToCache("product_stock:1", 0);
+            verify(productRepository, never()).findById(any());
+            verify(productRepository, never()).save(any());
         }
 
         @Test
-        @DisplayName("상품이 없으면 NotFoundException")
+        @DisplayName("상품이 없으면(갱신된 행 0) NotFoundException")
         void productMissing() {
-            when(productRepository.findById(1L)).thenReturn(Optional.empty());
+            when(productRepository.decreaseStock(1L, 10)).thenReturn(0);
 
             assertThatThrownBy(() -> productService.executeStockUpdate(1L, 10))
                     .isInstanceOf(NotFoundException.class);

@@ -31,8 +31,9 @@ public interface ProductRepository extends JpaRepository<Product,Long> {
     @Query("SELECT p.stock FROM Product p WHERE p.id = :productId")
     Optional<Integer> findStockById(@Param("productId") Long productId);
 
-    // 재고 업데이트 쿼리 추가
+    // 재고 상대 증감 (양수 = 차감, 음수 = 복구). "읽고 → 계산 → 저장"이 아니라 DB가 한 문장으로 원자 반영한다.
+    // 반환값은 갱신된 행 수 (0 = 상품 없음).
     @Modifying
-    @Query("UPDATE Product p SET p.stock = :updatedStock WHERE p.id = :productId")
-    void updateStock(@Param("productId") Long productId, @Param("updatedStock") int updatedStock);
+    @Query("UPDATE Product p SET p.stock = p.stock - :quantity WHERE p.id = :productId")
+    int decreaseStock(@Param("productId") Long productId, @Param("quantity") int quantity);
 }

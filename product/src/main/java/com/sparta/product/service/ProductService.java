@@ -155,21 +155,19 @@ public class ProductService {
      * reserveStock/rollbackOrderEvent가 실시간으로 관리하는 원자 예약 카운터와 같은 키였다. 이 비동기
      * 쓰기가 그 카운터를 덮어써 되돌리면서 지속적인 동시 주문 상황에서 오버셀이 발생했다(재검증 완료).
      * Redis 카운터는 이미 정확하므로 여기서 다시 쓸 필요가 없어 그 호출을 제거한다.
+     *
+     * 원자적 상대 UPDATE(stock = stock - ?)로 반영하고, 음수가 돼도 0으로 자르지 않는다.
+     * 차감(order.create)과 복구(stock.rollback)는 서로 다른 토픽이라 도착 순서가 보장되지 않는다. 결제 실패·만료로
+     * 풀린 재고가 재판매되면 "재판매 차감"이 "이전 복구"보다 먼저 와서 DB가 잠깐 음수가 될 수 있는데, 예전엔 이걸
+     * 0으로 클램프해서 차이를 버렸고 모든 이벤트가 반영된 뒤에도 DB가 Redis보다 많아졌다(SAGA 정합성 검증 중 발견:
+     * 재고 300 / 차감 356건 → DB가 57 많음). 또 findById → setStock → save는 두 컨슈머가 같은 행을 동시에
+     * 갱신하면 lost update가 난다. 상대 UPDATE는 순서와 무관하게 최종값이 정확하다.
+     * DB 재고는 판매 관문이 아니라 Redis를 뒤따라가는 기록이다(관문은 Redis Lua).
      */
     @Transactional
     public void executeStockUpdate(Long productId, int quantity) {
-        Product product = productRepository.findById(productId)
-                                           .orElseThrow(() -> new NotFoundException("상품이 존재하지 않습니다."));
-
-        int updatedStock = product.getStock() - quantity;
-        if (updatedStock < 0) {
-            // Redis 관문을 통과했는데 DB 기준으로 음수라면 Redis-DB가 이미 어긋난 상황. 로그만 남기고 0으로 막는다.
-            log.warn("DB 재고가 음수가 되려 함 - 상품 ID: {}, 현재: {}, 반영 시도: {}. 0으로 클램프.",
-                    productId, product.getStock(), quantity);
-            updatedStock = 0;
+        if (productRepository.decreaseStock(productId, quantity) == 0) {
+            throw new NotFoundException("상품이 존재하지 않습니다.");
         }
-
-        product.setStock(updatedStock);
-        productRepository.save(product);
     }
 }
