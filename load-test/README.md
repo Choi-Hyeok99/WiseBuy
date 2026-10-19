@@ -63,3 +63,24 @@ $ bash load-test/lua-concurrency-check.sh
 ```
 
 같은 검증의 JUnit 버전은 `product/.../ProductStockConcurrencyTest.java` (localhost:6379 Redis 필요).
+
+## SAGA 보상 정합성 검증 (`saga-consistency-check.sh`)
+
+결제 실패 / 결제 이탈(만료) / 다중 상품 부분 실패가 섞인 부하를 준 뒤, 모든 보상이 끝나면
+**Redis 재고 = DB 재고 = 초기 재고 − 결제 완료 수량**인지 확인한다. 상품·유저는 실행마다 새로 만든다.
+
+```bash
+# 결제 20% 실패, 결제 대기 만료를 1분으로 줄여서 기동
+PAYMENT_FAILURE_RATE=0.2 ORDER_PAYMENT_TIMEOUT_MINUTES=1 ORDER_EXPIRATION_CHECK_INTERVAL_MS=10000 docker compose up -d
+bash load-test/saga-consistency-check.sh      # STOCK, RATE, DURATION, ABANDON_RATE 조정 가능
+```
+
+```
+주문 PAYMENT_COMPLETED 259 / PAYMENT_FAILED 74 / EXPIRED 41, 부분 실패 181건 전부 롤백
+기대 재고 300 - 259 = 41  →  Redis 41 / DB 41
+== PASS: 보상 후 Redis = DB = 초기 재고 - 결제 완료 수량 ==
+```
+
+- 부분 실패는 상품 B의 DB 재고는 넉넉하게, Redis 예약 카운터는 0으로 둬서 "사전 검증은 통과했는데 예약 직전에 다른 사람이 마지막 재고를 가져간" 상황을 결정적으로 재현한다.
+- 시작 전에 Kafka 컨슈머 lag이 0이 될 때까지 기다린다. 이전 작업의 보상 이벤트가 소비 중이면 DB가 바빠 측정이 오염된다(실제로 한 번 겪음).
+
