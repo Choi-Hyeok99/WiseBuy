@@ -82,13 +82,4 @@ public class OrderController {
         orderService.preparePayment(orderId,userId);
         return ResponseEntity.ok("결제 준비가 완료되었습니다.");
     }
-    // 결제 상태 업데이트 API
-    @PostMapping("/{orderId}/update-status")
-    public ResponseEntity<String> updateOrderStatus(
-            @PathVariable Long orderId,
-            @RequestParam boolean isPaymentSuccessful,
-            @RequestHeader("X-Claim-sub") Long userId) { // 헤더에서 userId 받아오기
-        orderService.updateOrderStatusAfterPayment(orderId, isPaymentSuccessful, userId);
-        return ResponseEntity.ok("주문 상태가 업데이트되었습니다.");
-    }
 }

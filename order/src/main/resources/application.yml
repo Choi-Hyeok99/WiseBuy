@@ -71,6 +71,12 @@ spring:
       properties:
         spring.json.trusted.packages: "*"  # 모든 패키지에서 DTO 역직렬화 허용
 
+# ── 결제 대기 만료 (OrderExpirationScheduler) ─────────────────────────────────────
+# 주문 후 이 시간 안에 결제 결과가 안 오면 주문을 EXPIRED로 바꾸고 예약 재고를 stock.rollback으로 돌려놓는다.
+order:
+  payment-timeout-minutes: ${ORDER_PAYMENT_TIMEOUT_MINUTES:10}
+  expiration-check-interval-ms: ${ORDER_EXPIRATION_CHECK_INTERVAL_MS:60000}
+
 # ── Resilience4j: Feign 호출용 서킷 + 타임리미터 ───────────────────────────────
 # 하위 서비스가 연속으로 실패/지연되면 서킷을 열어 한동안 호출 자체를 막고(빠른 실패 + 하위에 숨돌릴 틈),
 # wait 시간이 지나면 몇 건만 흘려보내(half-open) 회복됐는지 확인하고 닫는다.

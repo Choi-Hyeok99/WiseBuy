@@ -189,6 +189,9 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       # kafka:29092는 위 kafka 서비스의 INTERNAL 리스너 주소 (컨테이너 간 통신 전용)
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      # 결제 대기 만료 시간(분)/점검 주기(ms). SAGA 검증 때만 짧게 줄인다 (load-test/saga-consistency-check.sh)
+      ORDER_PAYMENT_TIMEOUT_MINUTES: ${ORDER_PAYMENT_TIMEOUT_MINUTES:-10}
+      ORDER_EXPIRATION_CHECK_INTERVAL_MS: ${ORDER_EXPIRATION_CHECK_INTERVAL_MS:-60000}
     depends_on:
       - eureka-server
       - microservices_db
@@ -240,6 +243,8 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       # kafka:29092는 위 kafka 서비스의 INTERNAL 리스너 주소 (컨테이너 간 통신 전용)
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      # 결제 실패로 처리할 비율. 기본 0(부하테스트용), SAGA 보상 검증 때 0.2 등으로 올린다.
+      PAYMENT_FAILURE_RATE: ${PAYMENT_FAILURE_RATE:-0}
     depends_on:
       - eureka-server
       - microservices_db

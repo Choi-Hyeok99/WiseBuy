@@ -17,14 +17,19 @@ import com.sparta.order.exception.OrderNotFoundException;
 import com.sparta.order.repository.OrderItemRepository;
 import com.sparta.order.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class OrderService {
 
@@ -46,18 +51,21 @@ public class OrderService {
         Order order = createNewOrder(userId, address);
 
         // 3. 주문 항목 추가 및 재고 감소 (위에서 조회한 상품 정보 재사용 — 재조회 안 함)
-        int totalAmount = processOrderItems(wishlistItems, order, productById);
+        //    예약을 시도한 항목을 기록해두고, 이 트랜잭션이 롤백되면 그 항목들의 Redis 예약을 해제한다.
+        List<OrderItem> attemptedItems = new ArrayList<>();
+        releaseReservationsOnRollback(order.getId(), attemptedItems);
+        int totalAmount = processOrderItems(wishlistItems, order, productById, attemptedItems);
 
         // 4. 총 금액 업데이트
         order.setTotalAmount(totalAmount);
         orderRepository.save(order);
 
-        // 5. order.create 이벤트 발행 (상품별 1건).
+        // 5. order.create 이벤트 발행 (상품별 1건, 주문이 커밋된 뒤에만).
         //    재고 예약(Redis)은 위 processOrderItems에서 이미 끝났고, 이 이벤트는 product 쪽 배치 컨슈머가
         //    묶어서 DB에 반영하는 데 쓴다. 그래서 orderId만이 아니라 productId/quantity를 실어 보낸다.
         //    파티션 키를 productId로 두어 같은 상품 이벤트가 한 파티션에 모이도록(순서/배치 효율) 한다.
         for (OrderItem orderItem : order.getOrderItems()) {
-            orderProducerService.sendMessage(
+            orderProducerService.sendAfterCommit(
                     "order.create",
                     new KafkaMessage<>("ORDER_CREATED", stockEventPayload(order.getId(), orderItem.getProductId(), orderItem.getQuantity())),
                     String.valueOf(orderItem.getProductId()));
@@ -66,26 +74,60 @@ public class OrderService {
         // 6. 응답 DTO 반환
         return new OrderResponseDto(order);
     }
+    /**
+     * payment.result 반영. 결제 실패면 SAGA 보상으로 재고 복구(stock.rollback)를 발행한다.
+     *
+     * 상태 전이 가드: 결제 대기 중(PENDING/PAYMENT_PENDING)인 주문에만 반영한다. 예전엔 주문 상태와 상관없이
+     * 덮어써서, 이미 취소된 주문에 결제 실패가 늦게 오면 재고가 한 번 더 복구됐다.
+     * 결제 결과 이벤트가 재전달(at-least-once)돼도 두 번째부터는 이 가드에 걸려 무시된다.
+     */
     @Transactional
-    public void updateOrderStatusAfterPayment(Long orderId, boolean isPaymentSuccessful, Long userId) {
-        // 주문 조회
+    public void applyPaymentResult(Long orderId, boolean isPaymentSuccessful) {
         Order order = orderRepository.findById(orderId)
-                                     .orElseThrow(() -> new OrderNotFoundException("주문을 찾을 수 없습니다."));
+                                     .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다 ID: " + orderId));
 
-        // 사용자 ID 검증
-        if (!order.getUserId().equals(userId)) {
-            throw new IllegalArgumentException("사용자 ID가 일치하지 않습니다.");
+        if (!order.getStatus().isAwaitingPayment()) {
+            if (isPaymentSuccessful && order.getStatus() == OrderStatus.PAYMENT_COMPLETED) {
+                log.info("이미 결제 완료된 주문의 결제 성공 이벤트(재전달) - 주문 ID {} (무시)", orderId);
+            } else if (isPaymentSuccessful) {
+                // 결제는 됐는데 주문은 이미 취소/만료됨. 재고는 이미 풀렸으므로 주문을 되살리지 않고 환불 대상으로 남긴다.
+                // (payment에 환불 API가 없어 지금은 로그로만 남긴다 - README 한계 참고)
+                log.error("결제 성공 이벤트를 받았지만 주문이 이미 {} 상태 - 주문 ID {} (환불 필요)", order.getStatus(), orderId);
+            } else {
+                log.warn("이미 {} 상태인 주문의 결제 실패 이벤트 - 주문 ID {} (무시, 재고 중복 복구 방지)", order.getStatus(), orderId);
+            }
+            return;
         }
 
-        // 상태 업데이트 로직
         if (isPaymentSuccessful) {
-            order.setStatus(OrderStatus.PAYMENT_COMPLETED); // 결제 완료 상태로 설정
-            order.setOrderDate(LocalDateTime.now()); // 결제 완료 시간 기록
+            order.setStatus(OrderStatus.PAYMENT_COMPLETED);
         } else {
-            order.setStatus(OrderStatus.PAYMENT_FAILED); // 결제 실패
+            order.setStatus(OrderStatus.PAYMENT_FAILED);
+            publishStockRollbackAfterCommit(order);
+            log.info("결제 실패 -> 주문 취소, 재고 롤백 이벤트 발행 : 주문 ID {}", orderId);
         }
+        orderRepository.save(order);
+        log.info("주문 ID {} 상태 업데이트 : {}", orderId, order.getStatus());
+    }
 
-        orderRepository.save(order); // 변경 저장
+    /**
+     * 결제 대기 시간 초과 주문을 만료시키고 재고를 되돌린다 (OrderExpirationScheduler가 주문 단위로 호출).
+     * 결제창에서 이탈한 주문이 PENDING으로 남으면 선착순 재고가 영원히 묶이기 때문.
+     *
+     * 조회 시점과 처리 시점 사이에 결제 결과가 먼저 반영됐을 수 있어서 상태를 다시 확인한다.
+     * 정말 동시에 반영되면 @Version 충돌로 한쪽이 롤백되고, 롤백되면 stock.rollback도 나가지 않는다(커밋 후 발행).
+     */
+    @Transactional
+    public void expireOrder(Long orderId) {
+        Order order = orderRepository.findById(orderId).orElse(null);
+        if (order == null || !order.getStatus().isAwaitingPayment()) {
+            return;
+        }
+        order.setStatus(OrderStatus.EXPIRED);
+        order.setCancelDate(LocalDateTime.now());
+        publishStockRollbackAfterCommit(order);
+        orderRepository.save(order);
+        log.info("결제 대기 시간 초과 -> 주문 만료, 재고 롤백 이벤트 발행 : 주문 ID {}", orderId);
     }
 
 
@@ -117,34 +159,23 @@ public class OrderService {
 
         // 주문 상태 확인 (PENDING 상태에서만 취소 가능)
         if (!order.getStatus().equals(OrderStatus.PENDING)) {
-            throw new InvalidOrderStateException("배송 중 상태에서는 주문을 취소할 수 없습니다.");
+            throw new InvalidOrderStateException("결제 전(PENDING) 주문만 취소할 수 있습니다.");
         }
 
         // 주문 상태를 '취소'로 변경
         order.setStatus(OrderStatus.CANCELLED);
         order.setCancelDate(LocalDateTime.now());
 
-        // 주문 항목 상태 변경 및 재고 복구
+        // 주문 항목 상태 변경
         for (OrderItem item : order.getOrderItems()) {
             item.setStatus(OrderItemStatus.RETURNED); // 상태 변경 (상품이 반품됨)
-
-            // 상품 정보 조회 및 재고 복구
-            ProductResponseDto product = productClient.getProductById(item.getProductId());
-
-            if (product == null) {
-                throw new IllegalArgumentException("상품을 찾을 수 없습니다. 상품 ID: " + item.getProductId());
-            }
-
-            // 재고 복구: Redis는 즉시(sync), DB는 order.create 배치 컨슈머로.
-            // quantity 규약이 "차감할 수량(양수)"이므로 복구는 음수를 보낸다
-            // (product Lua는 DECRBY라 DECRBY -n = +n; 배치 컨슈머도 stock - (-n) = +n).
-            // 예전엔 여기서 양수를 보내 취소할수록 재고가 더 줄었다.
-            productClient.updateStock(item.getProductId(), new StockUpdateRequestDto(-item.getQuantity()));
-            orderProducerService.sendMessage(
-                    "order.create",
-                    new KafkaMessage<>("ORDER_CANCELLED", stockEventPayload(order.getId(), item.getProductId(), -item.getQuantity())),
-                    String.valueOf(item.getProductId()));
         }
+
+        // 재고 복구는 결제 실패·만료와 같은 stock.rollback 경로로 통일하고, 취소가 커밋된 뒤에만 발행한다.
+        // 예전엔 여기서 Redis를 Feign으로 즉시 복구하고 DB는 order.create(음수 수량)로 보냈는데,
+        // (1) 취소가 커밋 전에 실패해도 Redis는 이미 복구돼 재고가 늘어날 수 있었고
+        // (2) order.create 멱등키가 {orderId}:{productId}라 주문 생성 이벤트와 키가 겹쳐 DB 복구가 "중복"으로 건너뛰어졌다.
+        publishStockRollbackAfterCommit(order);
 
         // 변경된 주문 저장
         orderRepository.save(order);
@@ -212,13 +243,58 @@ public class OrderService {
     }
 
     // order.create 이벤트 payload. product 배치 컨슈머가 productId/quantity를 읽어 DB 재고를 반영한다.
-    // quantity: 양수 = 차감(주문), 음수 = 복구(취소).
+    // quantity: 양수 = 차감(주문). 복구는 stock.rollback으로 따로 보낸다.
     private Map<String, Object> stockEventPayload(Long orderId, Long productId, int quantity) {
         Map<String, Object> data = new HashMap<>();
         data.put("orderId", orderId);
         data.put("productId", productId);
         data.put("quantity", quantity);
         return data;
+    }
+
+    /**
+     * 주문 트랜잭션이 롤백되면 그때까지 예약을 시도한 재고를 해제한다 (다중 상품 주문의 부분 실패 보상).
+     *
+     * 예: A 예약 성공 → B 재고 부족(409) → 주문 롤백. DB는 롤백되지만 A의 Redis 예약은 그대로 남아 재고가 샜다.
+     * 예외를 catch하는 대신 트랜잭션 완료 콜백을 쓰는 이유는, 예약은 다 성공했는데 커밋에서 실패하는 경우까지
+     * 같이 잡기 위해서다. order.create는 커밋 후에만 나가므로 이때 DB 재고는 아직 차감 전 → Redis만 되돌린다.
+     *
+     * 성공한 항목만이 아니라 "시도한" 항목 전부를 보낸다. 예약 호출이 타임아웃이면 결과를 모르기 때문이다.
+     * product가 주문별 예약 기록으로 실제 예약된 것만 되돌리고, 해제가 예약보다 먼저 도착해도 툼스톤으로 막는다.
+     */
+    private void releaseReservationsOnRollback(Long orderId, List<OrderItem> reservedItems) {
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status != STATUS_ROLLED_BACK || reservedItems.isEmpty()) {
+                    return;
+                }
+                log.warn("주문 생성 롤백 -> Redis 재고 예약 {}건 해제 : 주문 ID {}", reservedItems.size(), orderId);
+                for (OrderItem item : reservedItems) {
+                    orderProducerService.sendMessage("stock.rollback",
+                            stockRollbackMessage(orderId, item, false), String.valueOf(item.getProductId()));
+                }
+            }
+        });
+    }
+
+    // SAGA 보상: 주문의 모든 항목 재고를 Redis·DB 모두 되돌린다. 커밋된 뒤에만 발행.
+    // product는 (orderId, productId)로 멱등 처리하므로 같은 주문의 보상이 재전달돼도 한 번만 복구된다.
+    private void publishStockRollbackAfterCommit(Order order) {
+        for (OrderItem item : order.getOrderItems()) {
+            orderProducerService.sendAfterCommit("stock.rollback",
+                    stockRollbackMessage(order.getId(), item, true), String.valueOf(item.getProductId()));
+        }
+    }
+
+    // restoreDb=false: DB에는 아직 차감이 반영되지 않은 경우(order.create 발행 전 롤백) - Redis 예약만 되돌린다.
+    private KafkaMessage<Map<String, Object>> stockRollbackMessage(Long orderId, OrderItem item, boolean restoreDb) {
+        return new KafkaMessage<>("STOCK_ROLLBACK", Map.of(
+                "orderId", orderId,
+                "productId", item.getProductId(),
+                "quantity", item.getQuantity(),
+                "restoreDb", restoreDb
+        ));
     }
 
     private Order createNewOrder(Long userId, String address) {
@@ -231,7 +307,7 @@ public class OrderService {
         return orderRepository.save(order);
     }
     private int processOrderItems(List<WishlistItemDto> wishlistItems, Order order,
-                                  Map<Long, ProductResponseDto> productById) {
+                                  Map<Long, ProductResponseDto> productById, List<OrderItem> attemptedItems) {
         int totalAmount = 0;
 
         for (WishlistItemDto item : wishlistItems) {
@@ -247,7 +323,10 @@ public class OrderService {
             // stock.update 컨슈머도 (stock - quantity)로 계산한다. 예전엔 여기서 -item.getQuantity()(음수)를
             // 보내서 DECRBY -n = +n 이 되어 주문할수록 재고가 오히려 늘어나고, 재고 부족 체크(stock < -n)도
             // 항상 통과하는 버그가 있었다. 양수로 바로잡음.
-            productClient.updateStock(product.getId(), new StockUpdateRequestDto(item.getQuantity()));
+            // 호출 "전에" 기록한다. 타임아웃이면 product에서 실제로 차감됐는지 알 수 없는데, 그런 항목도
+            // 해제 대상에 넣어야 재고가 새지 않는다. product는 주문별 예약 기록이 있을 때만 되돌리므로 안전하다.
+            attemptedItems.add(orderItem);
+            productClient.updateStock(product.getId(), new StockUpdateRequestDto(order.getId(), item.getQuantity()));
         }
 
         return totalAmount;

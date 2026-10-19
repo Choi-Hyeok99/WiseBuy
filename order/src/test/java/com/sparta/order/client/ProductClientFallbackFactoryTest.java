@@ -46,7 +46,7 @@ class ProductClientFallbackFactoryTest {
         void conflictIsRethrown() {
             ProductClient fallback = factory.create(feignStatus(409));
 
-            assertThatThrownBy(() -> fallback.updateStock(1L, new StockUpdateRequestDto(1)))
+            assertThatThrownBy(() -> fallback.updateStock(1L, new StockUpdateRequestDto(1L, 1)))
                     .isInstanceOf(FeignException.class)
                     .satisfies(e -> assertThat(((FeignException) e).status()).isEqualTo(409));
         }
@@ -80,7 +80,7 @@ class ProductClientFallbackFactoryTest {
         void connectionRefusedBecomesUnavailable() {
             ProductClient fallback = factory.create(new RuntimeException("Connection refused"));
 
-            assertThatThrownBy(() -> fallback.updateStock(1L, new StockUpdateRequestDto(1)))
+            assertThatThrownBy(() -> fallback.updateStock(1L, new StockUpdateRequestDto(1L, 1)))
                     .isInstanceOf(ProductServiceUnavailableException.class);
         }
 

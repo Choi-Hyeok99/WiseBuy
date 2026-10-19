@@ -6,5 +6,6 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 public class StockUpdateRequestDto {
-    private int quantity; // 재고 변화량 (양수: 증가, 음수: 감소)
+    private Long orderId; // 주문별 예약 기록 키. 주문 생성 롤백 시 실제로 예약된 만큼만 해제하는 근거
+    private int quantity; // 차감할 수량 (양수)
 }

@@ -1,12 +1,12 @@
 package com.sparta.order.scheduler;
 
-import com.sparta.order.client.ProductClient;
-import com.sparta.order.dto.StockUpdateRequestDto;
+import com.sparta.common.dto.KafkaMessage;
 import com.sparta.order.entity.Order;
 import com.sparta.order.entity.OrderItem;
 import com.sparta.order.entity.OrderItemStatus;
 import com.sparta.order.entity.OrderStatus;
 import com.sparta.order.repository.OrderRepository;
+import com.sparta.order.service.OrderProducerService;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.Hibernate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -15,17 +15,18 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Component
 @Slf4j
 public class OrderStatusScheduler {
 
     private final OrderRepository orderRepository;
-    private final ProductClient productClient;
+    private final OrderProducerService orderProducerService;
 
-    public OrderStatusScheduler(OrderRepository orderRepository, ProductClient productClient) {
+    public OrderStatusScheduler(OrderRepository orderRepository, OrderProducerService orderProducerService) {
         this.orderRepository = orderRepository;
-        this.productClient = productClient;
+        this.orderProducerService = orderProducerService;
     }
 
     @Scheduled(fixedRate = 300000) // 5분마다 실행
@@ -117,9 +118,16 @@ public class OrderStatusScheduler {
                 if (item.getStatus() == OrderItemStatus.RETURN_REQUESTED &&
                         now.isAfter(order.getDeliveryDate().plusMinutes(1))) {
                     item.setStatus(OrderItemStatus.RETURNED);
-                    productClient.updateStock(item.getProductId(),
-                            new StockUpdateRequestDto(item.getQuantity()));
-                    log.info("Stock updated for Product ID: {} due to return of Order ID: {}", item.getProductId(), order.getId());
+                    // 반품 재고 복구도 stock.rollback으로 (Redis·DB 모두, 반품 처리가 커밋된 뒤에만).
+                    // 예전엔 updateStock(+수량)을 불렀는데 그 API는 "차감할 수량" 규약이라 반품할수록 재고가 줄었고,
+                    // DB 반영 이벤트도 보내지 않아 Redis와 DB가 어긋났다.
+                    orderProducerService.sendAfterCommit("stock.rollback", new KafkaMessage<>("STOCK_ROLLBACK", Map.of(
+                            "orderId", order.getId(),
+                            "productId", item.getProductId(),
+                            "quantity", item.getQuantity(),
+                            "restoreDb", true
+                    )), String.valueOf(item.getProductId()));
+                    log.info("Stock rollback requested for Product ID: {} due to return of Order ID: {}", item.getProductId(), order.getId());
                 }
             }
         }
