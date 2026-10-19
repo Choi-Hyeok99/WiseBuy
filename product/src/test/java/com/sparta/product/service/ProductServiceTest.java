@@ -178,7 +178,7 @@ class ProductServiceTest {
         }
 
         @Test
-        @DisplayName("캐시 미스면 DB 에서 읽고 다시 캐시에 채운다 (TTL 300초)")
+        @DisplayName("캐시 미스면 DB 에서 읽고, 키가 없을 때만(SET NX) 캐시에 채운다 (TTL 300초)")
         void cacheMiss() {
             when(redisUtility.getFromCache("product_stock:1", Integer.class)).thenReturn(null);
             when(productRepository.findStockById(1L)).thenReturn(Optional.of(30));
@@ -186,7 +186,7 @@ class ProductServiceTest {
             int stock = productService.getProductStock(1L);
 
             assertThat(stock).isEqualTo(30);
-            verify(redisUtility).saveToCache("product_stock:1", 30, 300);
+            verify(redisUtility).saveToCacheIfAbsent("product_stock:1", 30, 300);
         }
 
         @Test

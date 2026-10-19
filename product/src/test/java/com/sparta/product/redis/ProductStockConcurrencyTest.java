@@ -70,15 +70,16 @@ class ProductStockConcurrencyTest {
         int concurrentRequests = 800;
         redisUtility.saveToCache("product_stock:" + KEY_A, initialStock);
 
+        // 예전엔 ready 래치(800)를 다 채울 때까지 기다린 뒤 fire했는데, 스레드가 40개뿐이라 먼저 뜬 40개가
+        // fire.await()에 묶인 채 나머지 760개는 시작조차 못 해 ready가 영원히 안 채워졌다(테스트 데드락).
+        // 전부 제출만 하고 바로 fire한다 - 40개 스레드가 동시에 몰아치는 경합은 그대로 유지된다.
         ExecutorService pool = Executors.newFixedThreadPool(40);
-        CountDownLatch ready = new CountDownLatch(concurrentRequests);
         CountDownLatch fire = new CountDownLatch(1);
         AtomicInteger success = new AtomicInteger();
         AtomicInteger rejected = new AtomicInteger();
 
         for (int i = 0; i < concurrentRequests; i++) {
             pool.submit(() -> {
-                ready.countDown();
                 try {
                     fire.await();
                     Long remaining = redisUtility.updateStockInRedis(KEY_A, 1);
@@ -90,7 +91,6 @@ class ProductStockConcurrencyTest {
             });
         }
 
-        ready.await();
         fire.countDown();
         pool.shutdown();
         assertThat(pool.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
